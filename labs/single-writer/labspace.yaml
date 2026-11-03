@@ -1,0 +1,89 @@
+title: "Single-Writer"
+description: >
+  Coordinate said a team is several sandboxes over one shared workspace. This lab
+  proves the one rule that makes that safe. Two agents writing the same file at
+  once lose almost everything they wrote - silently - because file locks do not
+  cross microVMs. You will reproduce the loss, see why locks don't help, then fix
+  it with the single-writer rule. A scripted replay of a real measured run; the
+  numbers come from sbx 0.50.0 and every step links to the script that produced
+  it. Fully simulated; nothing to install.
+
+# Landing-page card. Only shown when the repo has two or more labs. labs.json is
+# GENERATED from this block - never edit labs.json by hand.
+catalog:
+  icon: warning
+  description: "Prove it: two agents writing one shared file lose 93-97% of their writes, silently - because locks don't cross microVMs. Reproduce the loss, see the mechanism, then apply the single-writer fix."
+  tags: ["sandbox", "sbx", "agents", "coordinate", "shared-state", "data-loss", "single-writer"]
+  estimatedMinutes: 15
+  order: 7
+
+simulator: simulator.yaml
+
+terminals:
+  - id: host
+    title: Terminal
+    icon: terminal
+
+# Seed the shared workspace: the agents' MEMORY.md (a plain read-modify-write
+# file, exactly what a coding agent appends notes to), and trimmed copies of the
+# real reproduction scripts from ffroliva/sbx-team-kit so `cat` shows the real
+# thing. The behaviour is scripted so every learner gets the same result.
+files:
+  README.md: |
+    # Single-Writer - lab workspace
+
+    In Coordinate you stood up several sandboxes over ONE shared workspace. That
+    shared mount is what lets a developer's commit reach a reviewer - and it is
+    also a trap the moment two agents write the same file at the same time.
+
+    This lab reproduces that trap and then fixes it. Three scripts:
+
+      tests/race-test.sh          two sandboxes write MEMORY.md at once
+      tests/lock-visibility-test.sh   why flock and fcntl don't save you
+      tests/race-control.sh       the same work with ONE writer
+
+    > Everything here is a SCRIPTED REPLAY - no real sbx, microVMs, or disk. The
+    > numbers are real: they come from sbx 0.50.0 on a Windows 11 host, recorded
+    > in ffroliva/sbx-team-kit (FINDINGS.md, sections 1 and 1b). To PROVE it for
+    > yourself, run these scripts against real sbx from that repo. A simulator
+    > can show you the shape of the failure; it cannot be the evidence.
+  MEMORY.md: |
+    # Shared agent memory
+
+    Agents append notes here as they work. Each note is one line. Two agents
+    appending at once is a classic read-modify-write race.
+  tests/race-test.sh: |
+    #!/usr/bin/env bash
+    # Two sandboxes, one host-mount@1, writing MEMORY.md at the same time.
+    # Each appends 200 lines (read-modify-write, what agents do to MEMORY.md).
+    # Expected after both: 400 lines. Run it and count what survived.
+    set -euo pipefail
+    MSYS_NO_PATHCONV=1
+    # ... creates two sandboxes sharing one --mount, launches both writers ...
+    # Full version: https://github.com/ffroliva/sbx-team-kit/blob/main/tests/race-test.sh
+  tests/race-control.sh: |
+    #!/usr/bin/env bash
+    # The same 400 lines of work, but ONE writer does all of it.
+    # This is the fix, reduced to its essence: a single writer never races itself.
+    set -euo pipefail
+    MSYS_NO_PATHCONV=1
+    # Full version: https://github.com/ffroliva/sbx-team-kit/blob/main/tests/race-control.sh
+  tests/lock-visibility-test.sh: |
+    #!/usr/bin/env bash
+    # Two sandboxes on one host-mount@1. Hold a lock in sandbox A, try it in B.
+    # flock, POSIX fcntl (what SQLite and PostgreSQL use), and PID liveness.
+    set -euo pipefail
+    # Full version: https://github.com/ffroliva/sbx-team-kit/blob/main/tests/lock-visibility-test.sh
+
+sections:
+  - title: "The Slide Made a Claim"
+    contentPath: 00-the-claim.md
+  - title: "Watch the Writes Vanish"
+    contentPath: 01-watch-the-writes-vanish.md
+  - title: "Why Locks Don't Save You"
+    contentPath: 02-why-locks-dont-save-you.md
+  - title: "The Single-Writer Fix"
+    contentPath: 03-the-single-writer-fix.md
+
+variables:
+  repo: ffroliva/sbx-team-kit
