@@ -906,6 +906,36 @@ anything actually runs, `sbx env plan` shows you exactly what it's going to set 
 outside the box — including precisely which secrets it's going to resolve from
 *your* host — and it asks for your approval before it touches a single thing.
 
+## Slide 61a — A team of agents, measured
+
+Everything I just described about Capacity — one file, a fleet, the same setup
+everywhere — somebody actually ran it, hard, and wrote down every number. A
+backend engineer took a real Java service and had three agents build three
+features at once, one sandbox each. Three clean merges, full build green. A
+hundred and seventy-seven seconds, fifty-three cents. In the cloud it got
+*faster* — ninety-seven seconds, a third quicker than his laptop. And at the top
+end: a twenty-two-thousand-test suite across a five-sandbox fleet, about half a
+dollar a run, against nearly two hours on one machine. That's the moment Capacity
+stops being my claim and starts being a measurement. It's an independent
+evaluation, and every single number on this slide traces back to a script you can
+run yourself.
+
+## Slide 61b — Share the box, don't share the writes
+
+But the same engineer found the edge, and I want to be honest about it, because
+being honest about it makes the whole model *stronger*. The thing that makes each
+box safe is that it has its own kernel. And the moment two of those boxes try to
+share one piece of memory — one file, one database — that same wall turns against
+you. Writes just vanish: ninety-plus percent of them, silently, every time he
+reran it. Half a million database rows acknowledged as committed, and then simply
+not there. And the reason is almost beautiful in how bad it is — a lock held
+inside one sandbox is invisible to the next one, so both of them think they're
+alone with the data. Now watch where the fix lands. It's the exact fix this whole
+talk has been building toward: the coordination has to come from the platform,
+not from the agents agreeing to be polite. One writer, everyone else read-only, a
+broker that hands out fencing tokens. Same lesson as every other C, just one layer
+deeper — the boundary comes from the box, never from good behaviour.
+
 ## Slide 62 — All four done
 
 And there it is — all four Cs, every box ticked. Contain, Control, Choice,

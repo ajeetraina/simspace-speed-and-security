@@ -462,6 +462,58 @@
 
 <!-- chrome: false -->
 
+<div style="position:absolute;inset:0;background:#0d1b3a;background-image:radial-gradient(1200px 700px at 72% 18%,rgba(125,162,255,0.12),transparent 60%),radial-gradient(1000px 700px at 18% 92%,rgba(125,162,255,0.08),transparent 60%);display:flex;flex-direction:column;justify-content:center;padding:0 7%;font-family:ui-sans-serif,system-ui,sans-serif;color:#ffffff;">
+  <div style="font:700 20px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.22em;color:#7da2ff;text-transform:uppercase;">Capacity · measured on a real repo</div>
+  <div style="margin-top:20px;font:800 60px/1.08 ui-sans-serif,system-ui,sans-serif;max-width:92%;">A team of agents — not a promise, a measurement</div>
+  <div style="margin-top:14px;font:400 27px/1.35 ui-sans-serif,system-ui,sans-serif;color:#aeb8c9;max-width:80%;">3 headless agents, one sandbox each, building 3 features on a real Java 25 / Spring Boot service.</div>
+  <div style="margin-top:40px;display:flex;gap:22px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:300px;background:rgba(125,162,255,0.08);border:1px solid rgba(125,162,255,0.22);border-radius:16px;padding:26px 30px;">
+      <div style="font:800 56px/1 ui-sans-serif,system-ui,sans-serif;color:#7da2ff;">3 / 3</div>
+      <div style="margin-top:12px;font:400 23px/1.3 ui-sans-serif,system-ui,sans-serif;color:#d7deea;">features merged — full <code style="color:#8fe3b0;">./mvnw verify</code> green, 32/32 scenarios</div>
+    </div>
+    <div style="flex:1;min-width:300px;background:rgba(125,162,255,0.08);border:1px solid rgba(125,162,255,0.22);border-radius:16px;padding:26px 30px;">
+      <div style="font:800 56px/1 ui-sans-serif,system-ui,sans-serif;color:#7da2ff;">177&nbsp;s · $0.53</div>
+      <div style="margin-top:12px;font:400 23px/1.3 ui-sans-serif,system-ui,sans-serif;color:#d7deea;">end to end, locally — three features in under three minutes</div>
+    </div>
+    <div style="flex:1;min-width:300px;background:rgba(125,162,255,0.08);border:1px solid rgba(125,162,255,0.22);border-radius:16px;padding:26px 30px;">
+      <div style="font:800 56px/1 ui-sans-serif,system-ui,sans-serif;color:#7da2ff;">22,000 tests</div>
+      <div style="margin-top:12px;font:400 23px/1.3 ui-sans-serif,system-ui,sans-serif;color:#d7deea;">on a 5-sandbox cloud fleet: ~521&nbsp;s, ~$0.48/run — vs 1&nbsp;h&nbsp;49&nbsp;m on a laptop</div>
+    </div>
+  </div>
+  <div style="margin-top:30px;font:400 20px/1.4 ui-sans-serif,system-ui,sans-serif;color:#8a94a6;">Independent field evaluation on sbx 0.50.0. Every number has a script and a repeat count. Cloud agents ran 31% faster (97&nbsp;s vs 140&nbsp;s). One run each where noted — a repeat is owed before it's typical.</div>
+</div>
+
+---
+
+<!-- chrome: false -->
+
+<div style="position:absolute;inset:0;background:#0d1b3a;background-image:radial-gradient(1200px 700px at 70% 18%,rgba(244,180,0,0.10),transparent 60%),radial-gradient(1000px 700px at 18% 92%,rgba(125,162,255,0.08),transparent 60%);display:flex;flex-direction:column;justify-content:center;padding:0 7%;font-family:ui-sans-serif,system-ui,sans-serif;color:#ffffff;">
+  <div style="font:700 20px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.22em;color:#7da2ff;text-transform:uppercase;">The edge of Capacity · Coordinate</div>
+  <div style="margin-top:20px;font:800 60px/1.08 ui-sans-serif,system-ui,sans-serif;max-width:92%;">Share the box. Don't share the writes.</div>
+  <div style="margin-top:14px;font:400 27px/1.35 ui-sans-serif,system-ui,sans-serif;color:#aeb8c9;max-width:84%;">The same isolation that makes each sandbox safe — its own kernel — is exactly what makes shared memory unsafe.</div>
+  <div style="margin-top:36px;display:flex;gap:22px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:300px;background:rgba(244,180,0,0.08);border:1px solid rgba(244,180,0,0.28);border-radius:16px;padding:26px 30px;">
+      <div style="font:800 52px/1 ui-sans-serif,system-ui,sans-serif;color:#F4B400;">93–97% lost</div>
+      <div style="margin-top:12px;font:400 23px/1.3 ui-sans-serif,system-ui,sans-serif;color:#d7deea;">two sandboxes writing one shared file — writes vanish silently (repeated 3×)</div>
+    </div>
+    <div style="flex:1;min-width:300px;background:rgba(244,180,0,0.08);border:1px solid rgba(244,180,0,0.28);border-radius:16px;padding:26px 30px;">
+      <div style="font:800 52px/1 ui-sans-serif,system-ui,sans-serif;color:#F4B400;">494,800 rows</div>
+      <div style="margin-top:12px;font:400 23px/1.3 ui-sans-serif,system-ui,sans-serif;color:#d7deea;">acknowledged, then <strong>100% gone</strong> — two sandboxes, one database (4/4 runs)</div>
+    </div>
+    <div style="flex:1;min-width:300px;background:rgba(244,180,0,0.08);border:1px solid rgba(244,180,0,0.28);border-radius:16px;padding:26px 30px;">
+      <div style="font:800 52px/1 ui-sans-serif,system-ui,sans-serif;color:#F4B400;">locks don't cross VMs</div>
+      <div style="margin-top:12px;font:400 23px/1.3 ui-sans-serif,system-ui,sans-serif;color:#d7deea;"><code style="color:#ffd97a;">flock</code> &amp; <code style="color:#ffd97a;">fcntl</code> each hand the lock to the second sandbox</div>
+    </div>
+  </div>
+  <div style="margin-top:32px;background:rgba(38,174,96,0.12);border:1px solid rgba(38,174,96,0.35);border-radius:16px;padding:22px 30px;font:600 27px/1.4 ui-sans-serif,system-ui,sans-serif;color:#eafff1;">
+    The fix is the same shape as the box: <span style="color:#8fe3b0;">share read-only, write single-writer</span> — a memory broker that hands out fencing tokens. The boundary comes from the platform, not from the agent behaving itself.
+  </div>
+</div>
+
+---
+
+<!-- chrome: false -->
+
 <img src="assets/slide-62.webp" alt="Slide 62" width="1600" height="900" loading="lazy" decoding="async" style="position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;object-fit:fill" />
 
 ---
