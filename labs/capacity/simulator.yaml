@@ -1,0 +1,191 @@
+version: "2.0"
+
+metadata:
+  id: capacity
+  title: "Capacity"
+  summary: >
+    Declare a sandbox in sbxenv.yaml, commit it like code, and reproduce the
+    identical sandbox for every developer with `sbx env run`. All simulated with
+    real sbx commands (run, env run, ls).
+
+state:
+  org: "your-org"
+  sandbox:
+    shared: false # sbxenv.yaml committed so the team can reproduce it
+
+settings:
+  pace:
+    boot: 900
+    sync: 500
+
+defaults:
+  unmatched:
+    stderr: ["command not found - this command isn't part of the lab."]
+    exit: 1
+
+scenarios:
+  - id: sbx-version
+    when:
+      command: [sbx, version]
+    then:
+      output:
+        - "Docker Sandboxes (sbx) 0.12.0"
+        - "sandboxd: running"
+
+  # ===========================================================================
+  # Section 1 - The drift problem. An ad-hoc run only lives on your machine.
+  # ===========================================================================
+  - id: sbx-run-adhoc
+    when:
+      command: [sbx, run, claude]
+    then:
+      output:
+        - { text: "Creating sandbox 'claude' (agent: claude)...", delay: boot }
+        - "  agent, workspace, secrets, and policy taken from your local defaults."
+        - ""
+        - "⚠ This sandbox only exists on your machine. A teammate running the same"
+        - "  command may get a different setup. Declare it in sbxenv.yaml and use"
+        - "  `sbx env run` so everyone gets the same one."
+
+  # ===========================================================================
+  # Section 4 - Verify, then reproduce. `sbx env plan` is the dry-run that shows
+  # what would change outside the box (kits + secrets to provision, with an
+  # approval gate); `sbx env run` applies it. Plan format verified live.
+  # ===========================================================================
+  - id: sbx-env-plan
+    when:
+      command: [sbx, env, plan]
+    then:
+      output:
+        - "── LOAD ENVIRONMENT"
+        - "   reading environment file…"
+        - "     ./sbxenv.yaml"
+        - "   ✓ environment loaded"
+        - "── ENVIRONMENT PLAN"
+        - "   product-catalog"
+        - ""
+        - "   kits:"
+        - "+    - source: git+…/docker-cloud-sandboxes-demo.git#dir=…/dhi-mixin  (DHI pin + 3rd-party deny)"
+        - ""
+        - "   secrets:"
+        - "+    dhi-mcp-pat  (ref op://Engineering/DockerHub/pat · snapshot)"
+        - "       resolved on your host, needs your approval — never read from the file"
+        - ""
+        - "+  sandbox:"
+        - "+    name: product-catalog"
+        - "+    agent: claude"
+        - ""
+        - "   Plan: + 3 to add, ~ 0 to change, - 0 to destroy."
+        - "   ✓ not approved yet; applying asks once"
+
+  - id: sbx-env-run
+    when:
+      command: [sbx, env, run]
+    then:
+      output:
+        - { text: "Reading sbxenv.yaml... applying the plan...", delay: sync }
+        - "   secret 'dhi-mcp-pat': resolving op://Engineering/DockerHub/pat on this host [approve]  ✓"
+        - { text: "Creating sandbox 'product-catalog' (agent: claude, kit: dhi-mixin)...", delay: boot }
+        - "  workspace: .  mounted at /workspace"
+        - ""
+        - "✓ Identical to every other run - same agent, workspace, and kit. The secret was"
+        - "  resolved from YOUR source, not copied from the repo. No drift, no shared keys."
+
+  - id: sbx-env-rm
+    when:
+      command: [sbx, env, rm]
+    then:
+      output:
+        - "Removed sandbox 'product-catalog' and everything sbx env provisioned for it."
+
+  - id: sbx-ls-shared
+    when:
+      command: [sbx, ls]
+      state: { sandbox.shared: true }
+    then:
+      output:
+        - "NAME              AGENT    STATUS    PORTS   WORKSPACE"
+        - "product-catalog   claude   running   -       ."
+
+  - id: sbx-ls
+    when:
+      command: [sbx, ls]
+    then:
+      output:
+        - "NAME     AGENT    STATUS    PORTS   WORKSPACE"
+        - "claude   claude   running   -       ."
+
+  # ===========================================================================
+  # Section 3 - Share it like code. git add is a no-op; commit flips shared.
+  # ===========================================================================
+  - id: git-add
+    when:
+      command: [git, add]
+    then:
+      output: ["  (staged sbxenv.yaml)"]
+
+  - id: git-commit
+    when:
+      command: [git, commit]
+    then:
+      state: { sandbox.shared: true }
+      output:
+        - "[main 9f3c1a2] Add sbxenv.yaml - shared team sandbox"
+        - " 1 file changed, 8 insertions(+)"
+        - ""
+        - "The sandbox is now versioned like code - reviewed in PRs, rolled back, shared."
+
+  - id: git-push
+    when:
+      command: [git, push]
+    then:
+      output:
+        - { text: "   To github.com/your-org/product-catalog.git", delay: sync }
+        - "    main -> main"
+        - ""
+        - "Every teammate who pulls now has the exact same sandbox definition."
+
+  - id: git-status
+    when:
+      command: [git, status]
+    then:
+      output:
+        - "On branch main"
+        - "  sbxenv.yaml   (the shared sandbox definition)"
+
+  # ===========================================================================
+  # Agent sessions + filler.
+  # ===========================================================================
+  - id: claude-session
+    when:
+      command: [claude]
+    then:
+      session:
+        prompt: "claude> "
+        intro:
+          - "Claude Code ready. Enter a task, or type /exit to leave."
+        outro:
+          - "Claude session ended."
+
+  - id: agent-fallback
+    when:
+      agent: true
+    then:
+      output:
+        - "● Declare me in sbxenv.yaml and run `sbx env run` so the whole team gets"
+        - "  the same sandbox."
+
+  - id: cd
+    when:
+      command: [cd]
+    then:
+      output:
+        - "Note: this simulated terminal has no working directory - every command runs from the lab root."
+
+  - id: sbx-env-generic
+    when:
+      command: [sbx, env]
+    then:
+      output:
+        - "sbx env manages a sandbox declared in sbxenv.yaml. Try `sbx env run` to"
+        - "  create/attach it, or `sbx env rm` to remove it."

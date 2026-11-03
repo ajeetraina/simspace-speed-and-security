@@ -1,0 +1,316 @@
+version: "2.0"
+
+metadata:
+  id: coordinate
+  title: "Coordinate"
+  summary: >
+    Run more than one agent over the same project with real sbx verbs - create a
+    developer and a reviewer sandbox over one shared workspace, give each work
+    with `sbx exec`, and stay the coordinator who makes the product call. sbx
+    isolates the agents; it does not orchestrate them. All simulated with real sbx
+    commands (create, ls, exec, policy ls, stop, rm).
+
+state:
+  org: "your-org"
+  dev:
+    created: false   # `sbx create --name developer` made the developer box
+  reviewer:
+    created: false   # `sbx create --name reviewer` made the reviewer box
+  committed: false   # the developer committed CAT-12 to the shared workspace
+  reviewed: false    # the reviewer ran the change and raised a product question
+  decided: false     # you made the product call and the developer applied it
+  torndown: false    # the role sandboxes were removed
+
+settings:
+  pace:
+    boot: 900
+    sync: 500
+
+defaults:
+  unmatched:
+    stderr: ["command not found - this command isn't part of the lab."]
+    exit: 1
+
+scenarios:
+  - id: sbx-version
+    when:
+      command: [sbx, version]
+    then:
+      output:
+        - "Docker Sandboxes (sbx) 0.12.0"
+        - "sandboxd: running"
+
+  # ===========================================================================
+  # Section 1 - One box isn't a factory. A lone agent is one pair of hands.
+  # ===========================================================================
+  - id: sbx-run-solo
+    when:
+      command: [sbx, run, claude]
+    then:
+      output:
+        - { text: "Creating sandbox 'claude' (agent: claude)...", delay: boot }
+        - "claude> ready. One agent, one session, one pair of hands."
+        - ""
+        - "It can edit, test, and commit - but it both writes AND reviews its own"
+        - "work, and there's no second role to catch what it rationalises. A factory"
+        - "needs more than one agent. sbx runs one agent per sandbox, so make more"
+        - "sandboxes: `sbx create --name developer claude .`"
+
+  # ===========================================================================
+  # Section 2 - Stand up the roles. Two sandboxes over the SAME workspace, each
+  # boxed by the same policy. Create is real; the shared mount is the point.
+  # ===========================================================================
+  - id: sbx-create-developer
+    when:
+      command: [sbx, create, --name, developer]
+    then:
+      state: { dev.created: true }
+      output:
+        - { text: "Created sandbox 'developer' (agent: claude).", delay: boot }
+        - "  workspace: .  mounted at /workspace   (same files as every other role)"
+        - "  policy: inherits the global network policy from Control"
+        - ""
+        - "A box for the developer role. Now make one for the reviewer."
+
+  - id: sbx-create-reviewer
+    when:
+      command: [sbx, create, --name, reviewer]
+    then:
+      state: { reviewer.created: true }
+      output:
+        - { text: "Created sandbox 'reviewer' (agent: claude).", delay: boot }
+        - "  workspace: .  mounted at /workspace   (the SAME workspace as developer)"
+        - "  policy: inherits the global network policy from Control"
+        - ""
+        - "Two isolated agents, one shared project. See them with `sbx ls`."
+
+  - id: sbx-create-generic
+    when:
+      command: [sbx, create]
+    then:
+      output:
+        - "Usage: sbx create --name <role> claude ."
+        - "  Create one sandbox per role - try `developer`, then `reviewer`."
+
+  - id: sbx-ls-both
+    when:
+      command: [sbx, ls]
+      state: { dev.created: true, reviewer.created: true }
+    then:
+      output:
+        - "SANDBOX     AGENT    STATUS    PORTS   WORKSPACE"
+        - "developer   claude   running           ~/product-catalog-demo-showcase"
+        - "reviewer    claude   running           ~/product-catalog-demo-showcase"
+        - ""
+        - "Two agents, two microVMs - same WORKSPACE. Each is isolated from the host"
+        - "and from each other, but they edit the one project. That shared mount is"
+        - "what lets a developer's commit reach the reviewer."
+
+  - id: sbx-ls
+    when:
+      command: [sbx, ls]
+    then:
+      output:
+        - "SANDBOX   AGENT   STATUS   PORTS   WORKSPACE"
+        - ""
+        - "No role sandboxes yet. Create them with"
+        - "  sbx create --name developer claude ."
+        - "  sbx create --name reviewer claude ."
+
+  - id: sbx-policy-ls
+    when:
+      command: [sbx, policy, ls]
+    then:
+      output:
+        - "SANDBOX     RULE                         SOURCE"
+        - "developer   deny  3rd-party registries   global (Control)"
+        - "reviewer    deny  3rd-party registries   global (Control)"
+        - ""
+        - "Both roles inherit the SAME boundary you set in Control - adding agents"
+        - "doesn't widen what any of them can reach."
+
+  # ===========================================================================
+  # Section 3 - Give each role work. `sbx exec <sandbox> claude -p` runs the agent
+  # headless in that box. Developer writes and commits; reviewer reads the shared
+  # workspace and checks it.
+  # ===========================================================================
+  - id: sbx-exec-developer-apply
+    when:
+      command: [sbx, exec, developer, claude]
+      state: { reviewed: true }
+    then:
+      state: { decided: true }
+      output:
+        - { text: "developer (claude -p): applying your decision...", delay: sync }
+        - "  products with no category now show under \"Uncategorized\""
+        - "  committed b2c3d4e, tests still green"
+        - ""
+        - "Your call is in the code. Have the reviewer sign off, or tear the team down."
+
+  - id: sbx-exec-developer-work
+    when:
+      command: [sbx, exec, developer, claude]
+    then:
+      state: { committed: true }
+      output:
+        - { text: "developer (claude -p): reading backlog/CAT-12, editing product-list.js...", delay: sync }
+        - "  added a category filter to the product list"
+        - "  ran the tests: 12 passed"
+        - "  committed a1b2c3d to the shared workspace"
+        - ""
+        - "The commit lives in the mounted project - so the reviewer's box can see it."
+
+  - id: sbx-exec-reviewer-test
+    when:
+      command: [sbx, exec, reviewer, npm]
+    then:
+      output:
+        - "> product-catalog@1.0.0 test"
+        - "> node --test"
+        - ""
+        - "  tests 12"
+        - "  pass 12"
+        - ""
+        - "The reviewer ran the developer's commit in its OWN box - same files, its"
+        - "own isolated process."
+
+  - id: sbx-exec-reviewer-git
+    when:
+      command: [sbx, exec, reviewer, git]
+      state: { committed: true }
+    then:
+      output:
+        - "a1b2c3d (developer) CAT-12: add category filter to the product list"
+        - "9f3c1a2 Add sbxenv.yaml - shared team sandbox"
+        - ""
+        - "The reviewer sees the developer's commit because both boxes mount the same"
+        - "workspace. No copying, no handoff tool - just the shared project."
+
+  - id: sbx-exec-reviewer-claude
+    when:
+      command: [sbx, exec, reviewer, claude]
+      state: { committed: true }
+    then:
+      state: { reviewed: true }
+      output:
+        - { text: "reviewer (claude -p): checking a1b2c3d against CAT-12 and the policy...", delay: sync }
+        - "  ✓ category filter renders on the product list"
+        - "  ✓ filter narrows the list to one category"
+        - "  ✓ existing tests pass"
+        - "  ✓ no secrets added, no new 3rd-party registry (policy from Choice holds)"
+        - ""
+        - "  ⚠ product question, not a bug - the task never decided what to show for"
+        - "    products with NO category set. The reviewer will not guess."
+        - ""
+        - "There's no sbx command for this. The decision is yours - see the next step."
+
+  - id: sbx-exec-reviewer-claude-early
+    when:
+      command: [sbx, exec, reviewer, claude]
+    then:
+      output:
+        - "reviewer (claude -p): nothing to review yet - no commit in the workspace."
+        - "  Have the developer do the work first:"
+        - "  sbx exec developer claude -p \"Implement CAT-12\""
+
+  - id: sbx-exec-generic
+    when:
+      command: [sbx, exec]
+    then:
+      output:
+        - "Usage: sbx exec <sandbox> <command>"
+        - "  Give a role work headless, e.g."
+        - "  sbx exec developer claude -p \"Implement CAT-12\""
+        - "  or run a check: sbx exec reviewer npm test"
+
+  - id: sbx-attach
+    when:
+      command: [sbx, attach]
+    then:
+      output:
+        - "Attaching opens that role's interactive agent session (Ctrl-D to detach)."
+        - "In this lab, drive the roles non-interactively with"
+        - "  sbx exec <role> claude -p \"...\"  so every learner gets the same result."
+
+  # ===========================================================================
+  # Section 4 - Tear down. Removing the role sandboxes leaves the project intact.
+  # ===========================================================================
+  - id: sbx-stop
+    when:
+      command: [sbx, stop]
+    then:
+      output:
+        - "Stopped 'developer' and 'reviewer'. The workspace on your host is untouched."
+
+  - id: sbx-rm
+    when:
+      command: [sbx, rm]
+    then:
+      state: { torndown: true }
+      output:
+        - "Removed 'developer' and 'reviewer'. Two agents gone; the project and its"
+        - "git history stay on your host - the boxes were disposable, the work wasn't."
+
+  - id: sbx-prune
+    when:
+      command: [sbx, prune]
+    then:
+      state: { torndown: true }
+      output:
+        - "Removed all stopped sandboxes. The mounted workspace remains on your host."
+
+  # ===========================================================================
+  # Host-side git + agent sessions + filler.
+  # ===========================================================================
+  - id: git-log
+    when:
+      command: [git, log]
+      state: { committed: true }
+    then:
+      output:
+        - "a1b2c3d (developer) CAT-12: add category filter to the product list"
+        - "9f3c1a2 Add sbxenv.yaml - shared team sandbox"
+
+  - id: git-log-empty
+    when:
+      command: [git, log]
+    then:
+      output:
+        - "9f3c1a2 Add sbxenv.yaml - shared team sandbox"
+        - ""
+        - "No role work yet - have the developer implement CAT-12 first."
+
+  - id: claude-session
+    when:
+      command: [claude]
+    then:
+      session:
+        prompt: "claude> "
+        intro:
+          - "Claude Code ready. In a team you'd run this inside a role's box:"
+          - "sbx exec developer claude -p \"Implement CAT-12\"."
+        outro:
+          - "Claude session ended."
+
+  - id: agent-fallback
+    when:
+      agent: true
+    then:
+      output:
+        - "● I'm one role. Create a box per role with `sbx create`, then give each"
+        - "  work with `sbx exec <role> claude -p \"...\"`."
+
+  - id: cd
+    when:
+      command: [cd]
+    then:
+      output:
+        - "Note: this simulated terminal has no working directory - every command runs from the lab root."
+
+  - id: sbx-generic
+    when:
+      command: [sbx]
+    then:
+      output:
+        - "sbx runs one agent per sandbox. For a team, make several:"
+        - "  sbx create --name developer claude .   then   sbx ls"

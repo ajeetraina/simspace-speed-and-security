@@ -1,0 +1,75 @@
+title: "Capacity"
+description: >
+  A secured sandbox is only useful if the whole team gets the same one. Declare
+  the sandbox once in an sbxenv.yaml - its agent, workspace, and brokered secrets -
+  commit it like code, and watch a teammate reproduce the identical sandbox with a
+  single `sbx env run`. No drift, no "works on my machine". Fully simulated;
+  nothing to install.
+
+# Landing-page card. Only shown when the repo has two or more labs. labs.json is
+# GENERATED from this block - never edit labs.json by hand.
+catalog:
+  icon: groups
+  description: "Declare a sandbox once in sbxenv.yaml, share it like code, and reproduce the identical sandbox for every developer with sbx env run."
+  tags: ["sandbox", "sbx", "sbxenv", "reproducible", "team", "capacity"]
+  estimatedMinutes: 20
+  order: 5
+
+simulator: simulator.yaml
+
+terminals:
+  - id: host
+    title: Terminal
+    icon: terminal
+
+# Seed the project plus a committed sbxenv.yaml - the declarative definition of
+# the sandbox you secured across the earlier Cs.
+files:
+  README.md: |
+    # Capacity - lab workspace
+
+    You've secured one sandbox across the earlier Cs - Contain (an isolated
+    microVM), Control (a network policy), and Choice (the MCP tools). Capacity is
+    what makes it a team thing: declare that sandbox once and reproduce it for
+    everyone, identically.
+
+    In this lab you capture the sandbox in an sbxenv.yaml, commit it like code,
+    and reproduce it with `sbx env run`.
+
+    Everything here is scripted - no real sbx, Docker, or network - so every
+    learner gets the same result.
+  sbxenv.yaml: |
+    # sbxenv.yaml - the team's sandbox, declared once and shared.
+    schemaVersion: "1"
+    name: product-catalog
+    agent: claude
+    workspace: .
+    kits:
+      # the DHI pinning kit from Choice: registers the DHI MCP, steers to dhi.io,
+      # and denies 3rd-party registries at the network edge
+      - git+https://github.com/ajeetraina/docker-cloud-sandboxes-demo.git#dir=agent-cli/codex-dhi/dhi-mixin
+    secrets:
+      # a SOURCE, not a value - resolved on each developer's own host, never committed.
+      # The DHI mirror tools need a Docker Hub PAT; the proxy injects it on dhi.io only.
+      dhi-mcp-pat:
+        ref: "op://Engineering/DockerHub/pat"
+        snapshot: true
+  product-catalog-demo-showcase/package.json: |
+    {
+      "name": "product-catalog",
+      "version": "1.0.0",
+      "scripts": { "start": "node src/index.js" }
+    }
+
+sections:
+  - title: '"Works on My Machine" Is the Enemy'
+    contentPath: 00-the-drift-problem.md
+  - title: "Declare the Sandbox Once"
+    contentPath: 01-define-once.md
+  - title: "Share It Like Code"
+    contentPath: 02-share-like-code.md
+  - title: "Reproduce It Anywhere"
+    contentPath: 03-reproduce.md
+
+variables:
+  org: your-org

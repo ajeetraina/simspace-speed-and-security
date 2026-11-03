@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Box — What is a sandbox?</title>
+<style>
+  :root{
+    --blue:#1D63ED; --blue-ink:#12408f;
+    --green:#0b7268; --green-soft:#e7f0ee; --green-line:#17946e;
+    --ink:#0b0c10; --muted:#5b6472; --faint:#8891a0;
+    --frame:#c3c9d4; --card:#ffffff; --bg:#ffffff; --stage:#f8fafc;
+    --warn:#d23b3b; --warn-bg:#fdf3f3; --warn-line:#e5673a;
+    --ok:#0b7268; --ok-bg:#eafaf1;
+    --chip:#f1f3f6; --chip-ink:#2a313c; --focus:#1D63ED;
+    --shadow:0 1px 2px rgba(10,20,40,.06),0 8px 24px rgba(10,20,40,.06);
+    --radius:14px;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --robot:#1D63ED; --robot-dk:#12408f; --robot-face:#0a1830;
+    --item:#3d434e; --wall-ripple:#17946e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#eef1f6; --muted:#9aa4b2; --faint:#6b7483;
+      --frame:#3a4354; --card:#161b24; --bg:#0e1218; --stage:#121722;
+      --green-soft:#12241f; --green:#2fb89f; --green-line:#2fb89f; --ok:#57d6b4; --ok-bg:#12241f;
+      --warn:#ff7a6b; --warn-bg:#2a1714; --warn-line:#ff8a5c;
+      --chip:#1c232e; --chip-ink:#d6dde7;
+      --robot:#4f86ff; --robot-dk:#2a5fd0; --robot-face:#06101f; --item:#c3ccd8;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  .box-widget{font-family:var(--sans);color:var(--ink);background:var(--bg);max-width:640px;margin:0 auto;
+    border:1px solid var(--frame);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .box-widget *:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:8px}
+
+  /* header */
+  .bx-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:14px 18px;border-bottom:1px solid var(--frame);background:var(--card)}
+  .bx-title{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em;font-size:14px;color:var(--muted)}
+  .bx-title .dot{width:22px;height:22px;border-radius:7px;background:var(--green-soft);border:2px solid var(--green-line);display:inline-block}
+  .bx-head .links{display:flex;gap:16px}
+  .bx-head button.link{background:none;border:0;color:var(--blue);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:4px 2px}
+  .bx-head button.link:hover{text-decoration:underline}
+
+  .bx-body{padding:18px}
+
+  /* toggle */
+  .bx-seg{display:inline-flex;border:1px solid var(--frame);border-radius:11px;overflow:hidden;margin:0 auto 16px;background:var(--card)}
+  .bx-seg{display:flex;width:max-content}
+  .bx-seg button{font:inherit;font-size:14px;font-weight:700;padding:9px 18px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+  .bx-seg button[aria-pressed=true]{background:var(--blue);color:#fff}
+  .seg-wrap{display:flex;justify-content:center}
+
+  /* stage */
+  .bx-stage{position:relative;width:100%;max-width:440px;margin:4px auto 0;display:block}
+  .bx-stage svg{width:100%;height:auto;display:block;background:var(--stage);border-radius:var(--radius)}
+  .frame-rect{fill:var(--stage);stroke:var(--frame);stroke-width:1.5;stroke-dasharray:4 7;rx:14}
+  .frame-label{fill:var(--muted);font:700 15px var(--sans);letter-spacing:.04em}
+  .sandbox-rect{fill:var(--green-soft);stroke:var(--green);stroke-width:3.5}
+  .sandbox-label{fill:var(--green);font:800 17px var(--sans)}
+  .sandbox-group{opacity:0}
+  .mode-sandbox .sandbox-group{opacity:1}
+  .item text{fill:var(--item);font:500 17px var(--sans);text-anchor:middle}
+  .item .glyph{fill:none;stroke:var(--item);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .item .glyph .solid{fill:var(--item);stroke:none}
+  .item{transition:opacity .5s ease, filter .5s ease}
+  .mode-sandbox .item.outside{opacity:.4;filter:blur(1.1px)}
+  .item.pulse{animation:pulse .6s ease}
+  .item.shake{animation:shake .5s ease}
+  .item.gone{opacity:0 !important;transition:opacity .4s ease}
+
+  /* agent robot */
+  #agent{transition:transform .72s cubic-bezier(.22,1,.36,1)}
+  #agent .bob{transform-box:fill-box;transform-origin:center;animation:breathe 3.6s ease-in-out infinite}
+  #agent.walking .bob{animation:bob .42s ease-in-out infinite}
+  #agent .antenna-ball{transform-box:fill-box;transform-origin:bottom center}
+  #agent.walking .antenna{animation:wiggle .42s ease-in-out infinite;transform-box:fill-box;transform-origin:bottom center}
+  #agent .eye{transform-box:fill-box;transform-origin:center;animation:blink 4.2s infinite}
+  .robot-head{fill:var(--robot);stroke:var(--robot-dk);stroke-width:1.4}
+  .robot-screen{fill:var(--robot-face)}
+  .robot-eye{fill:#eaf1ff}
+  .robot-body{fill:var(--robot-dk)}
+  .robot-arm{fill:var(--robot)}
+  .robot-foot{fill:var(--robot-dk)}
+  .robot-antenna{stroke:var(--robot-dk);stroke-width:2.5}
+  .robot-ball{fill:var(--robot)}
+
+  .bubble{opacity:0}
+  .bubble.show{animation:popBubble 1.4s ease}
+  .ripple{opacity:0}
+  .ripple.go{animation:ripple .7s ease}
+  .spark{opacity:0}
+  .spark.go{animation:spark .8s ease}
+  .puff{opacity:0}
+  .puff.go{animation:puff .7s ease}
+
+  /* narration + outcome */
+  .bx-narr{margin:16px 2px 10px;min-height:22px;font-size:16px;color:var(--muted)}
+  .bx-out{min-height:0;border-left:4px solid var(--blue);background:var(--chip);border-radius:0 10px 10px 0;
+    padding:0 16px;max-height:0;opacity:0;overflow:hidden;transition:all .45s cubic-bezier(.22,1,.36,1)}
+  .bx-out.show{max-height:140px;opacity:1;padding:13px 16px}
+  .bx-out.ok{border-left-color:var(--ok);background:var(--ok-bg)}
+  .bx-out.warn{border-left-color:var(--warn-line);background:var(--warn-bg)}
+  .bx-out b{color:var(--ink)}
+  .bx-out .label{font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px}
+  .bx-out.ok .label{color:var(--ok)} .bx-out.warn .label{color:var(--warn)}
+
+  /* task chips */
+  .bx-ask{margin-top:18px}
+  .bx-ask .eyebrow{font:800 12px var(--sans);letter-spacing:.12em;color:var(--faint);text-transform:uppercase;margin-bottom:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{display:inline-flex;align-items:center;gap:8px;font:600 15px var(--sans);color:var(--chip-ink);
+    background:var(--chip);border:1.5px solid transparent;border-radius:999px;padding:10px 16px;cursor:pointer}
+  .chip:hover{border-color:var(--blue)}
+  .chip[disabled]{opacity:.55;cursor:progress}
+  .chip .tick{width:18px;height:18px;border-radius:50%;background:var(--green);color:#fff;display:none;
+    align-items:center;justify-content:center;font-size:12px;font-weight:800}
+  .chip.done .tick{display:inline-flex}
+
+  /* text version */
+  .bx-text{display:none;padding:4px 2px}
+  .bx-widget.textmode .bx-stage,.bx-widget.textmode .bx-narr,.bx-widget.textmode .bx-out{display:none}
+  .bx-widget.textmode .bx-text{display:block}
+  .bx-text h4{margin:14px 0 6px;font-size:15px}
+  .bx-text p{margin:0 0 4px;color:var(--muted);font-size:15px;line-height:1.5}
+
+  /* keyframes */
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @keyframes wiggle{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+  @keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+  @keyframes pulse{0%,100%{transform:scale(1)}40%{transform:scale(1.18)}}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+  @keyframes popBubble{0%{opacity:0;transform:translateY(6px) scale(.8)}20%{opacity:1;transform:translateY(0) scale(1)}80%{opacity:1}100%{opacity:0}}
+  @keyframes ripple{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.06)}}
+  @keyframes spark{0%{opacity:0;transform:scale(.4)}40%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.3)}}
+  @keyframes puff{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(1.8)}}
+
+  @media (prefers-reduced-motion: reduce){
+    #agent{transition:opacity .35s ease}
+    #agent .bob,#agent.walking .bob,#agent.walking .antenna,#agent .eye{animation:none !important}
+    .item.pulse,.item.shake{animation:none}
+    .bubble.show,.ripple.go,.spark.go,.puff.go{animation:none;opacity:1}
+    .bx-out{transition:opacity .3s ease}
+  }
+
+  @media (max-width:420px){
+    .bx-body{padding:14px}
+    .chips{gap:8px}
+    .chip{font-size:14px;padding:9px 13px}
+  }
+</style>
+</head>
+<body style="margin:0;padding:24px;background:var(--bg,#fff)">
+
+<div class="box-widget bx-widget" id="widget">
+  <div class="bx-head">
+    <div class="bx-title"><span class="dot" aria-hidden="true"></span> THE BOX</div>
+    <div class="links">
+      <button class="link" id="btnReset" type="button">Reset</button>
+      <button class="link" id="btnText" type="button" aria-pressed="false">Text version</button>
+    </div>
+  </div>
+
+  <div class="bx-body">
+    <div class="seg-wrap">
+      <div class="bx-seg" role="group" aria-label="Where the agent runs">
+        <button type="button" id="segNo" aria-pressed="true">No sandbox</button>
+        <button type="button" id="segYes" aria-pressed="false">In a sandbox</button>
+      </div>
+    </div>
+
+    <!-- STAGE -->
+    <div class="bx-stage">
+      <svg viewBox="0 0 480 320" role="img" aria-label="A picture of your computer, the agent, and your files.">
+        <!-- your computer frame -->
+        <rect class="frame-rect" x="6" y="6" width="468" height="308" rx="14"/>
+        <text class="frame-label" x="22" y="32">Your computer</text>
+
+        <!-- sandbox box (grows in sandbox mode) -->
+        <g class="sandbox-group" id="sandboxGroup">
+          <rect class="sandbox-rect" id="sandboxRect" x="16" y="46" width="250" height="256" rx="14"/>
+          <rect class="ripple" id="wallRipple" x="16" y="46" width="250" height="256" rx="14" fill="none" stroke="var(--wall-ripple)" stroke-width="3"/>
+          <text class="sandbox-label" x="34" y="72">Sandbox</text>
+        </g>
+
+        <!-- items -->
+        <g class="item inside" id="itProject" transform="translate(150,168)">
+          <g class="glyph" transform="scale(1.7)"><path d="M-11 -7 H-3 L0 -4 H11 V9 H-11 Z"/></g>
+          <text y="46">Your project</text>
+          <g class="spark" id="sparkProject"><g fill="var(--blue)" stroke="none">
+            <path d="M-26 -18 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 l6 -2 Z"/>
+            <path d="M24 -24 l1.5 4.5 l4.5 1.5 l-4.5 1.5 l-1.5 4.5 l-1.5 -4.5 l-4.5 -1.5 l4.5 -1.5 Z"/>
+            <path d="M20 14 l1.5 4.5 l4.5 1.5 l-4.5 1.5 l-1.5 4.5 l-1.5 -4.5 l-4.5 -1.5 l4.5 -1.5 Z"/>
+          </g></g>
+        </g>
+        <g class="item outside" id="itPhotos" transform="translate(342,108)">
+          <g class="glyph" transform="scale(1.7)"><rect x="-11" y="-9" width="22" height="18" rx="2"/><path d="M-9 7 L-3 0 L2 4 L5 1 L9 7"/><circle cx="5" cy="-4" r="2"/></g>
+          <text y="42">Photos</text>
+        </g>
+        <g class="item outside" id="itPwd" transform="translate(430,108)">
+          <g class="glyph" transform="scale(1.7)"><circle cx="-6" cy="0" r="5"/><path d="M-1 0 H11 M7 0 V4 M10 0 V3"/></g>
+          <text y="42">Passwords</text>
+        </g>
+        <g class="item outside" id="itDocs" transform="translate(360,232)">
+          <g class="glyph" transform="scale(1.7)"><path d="M-8 -11 H4 L9 -6 V11 H-8 Z"/><path d="M-4 -2 H5 M-4 3 H5 M-4 7 H2"/></g>
+          <text y="42">Documents</text>
+          <g class="puff" id="puffDocs" fill="var(--faint)" stroke="none">
+            <circle cx="-10" cy="-4" r="6"/><circle cx="8" cy="-8" r="5"/><circle cx="12" cy="4" r="6"/><circle cx="-4" cy="8" r="5"/>
+          </g>
+        </g>
+
+        <!-- agent robot -->
+        <g id="agent" transform="translate(96,232)">
+          <g class="bob">
+            <g class="antenna">
+              <line class="robot-antenna" x1="0" y1="-30" x2="0" y2="-39"/>
+              <rect class="robot-ball antenna-ball" x="-3.5" y="-45" width="7" height="7" rx="1.6"/>
+            </g>
+            <rect class="robot-arm" x="-4" y="-4" width="8" height="8" rx="1.8" transform="translate(-26 -2) rotate(-40)"/>
+            <rect class="robot-arm" x="-4" y="-4" width="8" height="8" rx="1.8" transform="translate(26 -2) rotate(40)"/>
+            <rect class="robot-foot" x="-12" y="5" width="9" height="15" rx="3"/>
+            <rect class="robot-foot" x="3" y="5" width="9" height="15" rx="3"/>
+            <rect class="robot-head" x="-20" y="-31" width="40" height="40" rx="9"/>
+            <rect class="robot-screen" x="-15" y="-24" width="30" height="18" rx="3.5"/>
+            <rect class="robot-eye eye" x="-9" y="-18.5" width="6" height="6" rx="1.4"/>
+            <rect class="robot-eye eye" x="3" y="-18.5" width="6" height="6" rx="1.4"/>
+            <rect class="robot-body" x="-4" y="-1" width="8" height="2.8" rx="1.4"/>
+          </g>
+          <g class="bubble" id="bubble" transform="translate(30,-40)">
+            <rect x="0" y="-16" width="40" height="28" rx="9" fill="var(--card)" stroke="var(--frame)" stroke-width="1.5"/>
+            <path d="M6 10 l-8 10 l16 -8 Z" fill="var(--card)" stroke="var(--frame)" stroke-width="1.5"/>
+            <text x="20" y="4" text-anchor="middle" font="800 16px var(--sans)" fill="var(--muted)">?</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <!-- narration + outcome -->
+    <p class="bx-narr" id="narr" aria-live="polite">Your agent sits on your computer with everything you own. Ask it to do something.</p>
+    <div class="bx-out" id="outcome" aria-live="polite" role="status"><span class="label" id="outLabel"></span><span id="outText"></span></div>
+
+    <!-- text version -->
+    <div class="bx-text" id="textVersion" aria-live="polite"></div>
+
+    <!-- task chips -->
+    <div class="bx-ask">
+      <div class="eyebrow">Ask the agent to…</div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const widget=document.getElementById('widget');
+  const agent=document.getElementById('agent');
+  const narr=document.getElementById('narr');
+  const outcome=document.getElementById('outcome');
+  const outLabel=document.getElementById('outLabel');
+  const outText=document.getElementById('outText');
+  const chipsWrap=document.getElementById('chips');
+  const sandboxRect=document.getElementById('sandboxRect');
+  const wallRipple=document.getElementById('wallRipple');
+  const bubble=document.getElementById('bubble');
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  const HOME={no:[96,232], yes:[70,214]};   // agent resting spot per mode
+  const WALL_X=250;                           // sandbox right wall
+  let mode='no', busy=false;
+
+  const ITEMS={
+    project:{el:document.getElementById('itProject'), x:150,y:168, inside:true},
+    photos:{el:document.getElementById('itPhotos'),  x:342,y:108, inside:false},
+    passwords:{el:document.getElementById('itPwd'),  x:430,y:108, inside:false},
+    documents:{el:document.getElementById('itDocs'), x:360,y:232, inside:false},
+  };
+
+  const TASKS=[
+    {id:'project',   label:'Fix a bug in my project'},
+    {id:'photos',    label:'Find a photo'},
+    {id:'passwords', label:'Find my passwords'},
+    {id:'documents', label:'Free up some disk space'},
+  ];
+  const NARR={
+    project:'You ask: “Fix a bug in my project.” The agent sets off.',
+    photos:'You ask: “Find a photo.” The agent sets off.',
+    passwords:'You ask: “Find my passwords.” The agent sets off.',
+    documents:'You ask: “Free up some disk space.” The agent sets off.',
+  };
+  // outcomes[mode][task] = {kind, text}
+  const OUT={
+    no:{
+      project:{kind:'ok',  t:'Done. It fixed the bug in your project.'},
+      photos:{kind:'warn', t:'It walked straight into your photos. Nothing stopped it.'},
+      passwords:{kind:'warn',t:'It found your passwords and picked them up. That was easy. Too easy.'},
+      documents:{kind:'warn',t:'It deleted your documents to make room. They’re gone.'},
+    },
+    yes:{
+      project:{kind:'ok', t:'Done. Your project is inside the box, on purpose.'},
+      photos:{kind:'ok',  t:'Bonk. From inside the box, your photos aren’t there at all.'},
+      passwords:{kind:'ok',t:'Bonk. Your passwords are outside the box, so there’s nothing to find.'},
+      documents:{kind:'ok',t:'It can only tidy up inside the box. Your documents are safe outside it.'},
+    }
+  };
+
+  function moveAgent(x,y){ agent.setAttribute('transform',`translate(${x},${y})`); }
+  function wait(ms){ return new Promise(r=>setTimeout(r, reduce.matches?Math.min(ms,120):ms)); }
+  function fire(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+  function setMode(m){
+    mode=m;
+    document.getElementById('segNo').setAttribute('aria-pressed', m==='no');
+    document.getElementById('segYes').setAttribute('aria-pressed', m==='yes');
+    widget.classList.toggle('mode-sandbox', m==='yes');
+    moveAgent(...HOME[m]);
+    clearOutcome();
+    narr.textContent = m==='yes'
+      ? 'Now the agent is in a box. Only your project went in with it. Ask it to do something.'
+      : 'Your agent sits on your computer with everything you own. Ask it to do something.';
+  }
+
+  function clearOutcome(){ outcome.className='bx-out'; outLabel.textContent=''; outText.textContent=''; }
+  function showOutcome(kind,text){
+    outcome.className='bx-out show '+(kind==='warn'?'warn':'ok');
+    outLabel.textContent = kind==='warn' ? 'Watch out' : 'Safe';
+    outText.innerHTML = text;
+  }
+
+  async function runTask(id){
+    if(busy) return; busy=true;
+    chipsWrap.querySelectorAll('.chip').forEach(c=>c.disabled=true);
+    clearOutcome();
+    narr.textContent = NARR[id];
+    const it=ITEMS[id];
+    const res=OUT[mode][id];
+    agent.classList.add('walking');
+
+    const blocked = (mode==='yes' && !it.inside);
+    if(blocked){
+      // walk to the wall beside the item's height, then bump
+      await wait(40);
+      moveAgent(WALL_X-28, Math.max(96, Math.min(250, it.y)));
+      await wait(760);
+      // bump: nudge into wall and back
+      moveAgent(WALL_X-14, Math.max(96, Math.min(250, it.y)));
+      fire(wallRipple,'go');
+      await wait(180);
+      moveAgent(WALL_X-30, Math.max(96, Math.min(250, it.y)));
+      fire(bubble,'show');
+      await wait(900);
+    } else {
+      // walk to the item
+      await wait(40);
+      moveAgent(it.x, it.y+34);
+      await wait(760);
+      if(id==='project'){ fire(ITEMS.project.el,'pulse'); fire(document.getElementById('sparkProject'),'go'); }
+      else { fire(it.el,'pulse'); }
+      if(mode==='no' && id==='documents'){
+        await wait(250); fire(it.el,'shake'); await wait(460);
+        fire(document.getElementById('puffDocs'),'go'); it.el.classList.add('gone'); await wait(400);
+      } else { await wait(500); }
+    }
+
+    agent.classList.remove('walking');
+    moveAgent(...HOME[mode]);
+    showOutcome(res.kind, res.t);
+    markDone(id);
+    await wait(650);
+    chipsWrap.querySelectorAll('.chip').forEach(c=>c.disabled=false);
+    busy=false;
+  }
+
+  function markDone(id){
+    const c=chipsWrap.querySelector(`[data-task="${id}"]`);
+    if(c) c.classList.add('done');
+  }
+
+  function reset(){
+    if(busy) return;
+    ITEMS.documents.el.classList.remove('gone');
+    chipsWrap.querySelectorAll('.chip').forEach(c=>c.classList.remove('done'));
+    setMode('no');
+  }
+
+  // build chips
+  TASKS.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='chip'; b.type='button'; b.dataset.task=t.id;
+    b.innerHTML=`<span class="tick" aria-hidden="true">✓</span>${t.label}`;
+    b.addEventListener('click',()=>runTask(t.id));
+    chipsWrap.appendChild(b);
+  });
+
+  // text version content
+  function buildText(){
+    const tv=document.getElementById('textVersion');
+    const row=(m,id)=>`<p><b>${TASKS.find(t=>t.id===id).label}:</b> ${OUT[m][id].t}</p>`;
+    tv.innerHTML =
+      '<h4>No sandbox — the agent can reach everything</h4>'+TASKS.map(t=>row('no',t.id)).join('')+
+      '<h4>In a sandbox — only your project is inside the box</h4>'+TASKS.map(t=>row('yes',t.id)).join('');
+  }
+  buildText();
+
+  // wire controls
+  document.getElementById('segNo').addEventListener('click',()=>!busy&&setMode('no'));
+  document.getElementById('segYes').addEventListener('click',()=>!busy&&setMode('yes'));
+  document.getElementById('btnReset').addEventListener('click',reset);
+  const btnText=document.getElementById('btnText');
+  btnText.addEventListener('click',()=>{
+    const on=widget.classList.toggle('textmode');
+    btnText.setAttribute('aria-pressed',on);
+    btnText.textContent = on ? 'Picture version' : 'Text version';
+  });
+
+  setMode('no');
+})();
+</script>
+</body>
+</html>

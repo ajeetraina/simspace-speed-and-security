@@ -1,0 +1,17 @@
+.DS_Store
+*.local
+site/
+
+# Generated from labs/*/labspace.yaml — never commit it.
+labs.json
+
+# Exported slide decks (large binaries) — keep source in deck.md, not PPTX.
+*.pptx
+
+# Personal overlay for .sbxenv.yaml — machine-specific sandbox settings, passed
+# as `sbx env run .sbxenv.yaml local.sbxenv.yaml`.
+local.sbxenv.yaml
+
+# Python cache
+__pycache__/
+*.pyc

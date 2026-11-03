@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Door — one way out, with a guard</title>
+<style>
+  :root{
+    --blue:#1D63ED; --blue-dk:#12408f;
+    --purple:#6b3fc4; --purple-dk:#4d2a93; --purple-soft:#efe9fb;
+    --green:#0b7268; --green-soft:#e7f0ee; --green-line:#17946e; --ok:#0b7268; --ok-bg:#eafaf1;
+    --ink:#0b0c10; --muted:#5b6472; --faint:#8891a0;
+    --frame:#c3c9d4; --card:#fff; --bg:#fff; --stage:#f8fafc;
+    --warn:#d23b3b; --warn-bg:#fdf3f3; --warn-line:#e5673a;
+    --chip:#f1f3f6; --chip-ink:#2a313c; --focus:#1D63ED;
+    --item:#3d434e; --log-bg:#0d1526; --log-ink:#cdd6e5;
+    --shadow:0 1px 2px rgba(10,20,40,.06),0 8px 24px rgba(10,20,40,.06);
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#eef1f6; --muted:#9aa4b2; --faint:#6b7483;
+      --frame:#3a4354; --card:#161b24; --bg:#0e1218; --stage:#121722;
+      --green-soft:#12241f; --green:#2fb89f; --green-line:#2fb89f; --ok:#57d6b4; --ok-bg:#12241f;
+      --purple:#9f7aec; --purple-dk:#6b3fc4; --purple-soft:#211a33;
+      --warn:#ff7a6b; --warn-bg:#2a1714; --warn-line:#ff8a5c;
+      --chip:#1c232e; --chip-ink:#d6dde7; --item:#c3ccd8; --log-bg:#0a0f1a; --log-ink:#b9c4d6;
+      --blue:#4f86ff; --blue-dk:#2a5fd0;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  .box-widget{font-family:var(--sans);color:var(--ink);background:var(--bg);max-width:660px;margin:0 auto;
+    border:1px solid var(--frame);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .box-widget *:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:8px}
+  .bx-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--frame);background:var(--card)}
+  .bx-title{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em;font-size:14px;color:var(--muted)}
+  .bx-title .dot{width:22px;height:22px;border-radius:7px;background:var(--purple-soft);border:2px solid var(--purple);display:inline-block}
+  .bx-head .links{display:flex;gap:16px}
+  .bx-head button.link{background:none;border:0;color:var(--blue);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:4px 2px}
+  .bx-head button.link:hover{text-decoration:underline}
+  .bx-body{padding:18px}
+
+  .bx-stage{width:100%;max-width:460px;margin:0 auto}
+  .bx-stage svg{width:100%;height:auto;display:block;background:var(--stage);border-radius:14px}
+  .net-label,.sandbox-label{font:700 15px var(--sans)}
+  .net-label{fill:var(--muted)} .sandbox-label{fill:var(--green);font-size:17px;font-weight:800}
+  .sandbox-box{fill:var(--green-soft);stroke:var(--green);stroke-width:3.5}
+  .door-bar{fill:var(--purple)}
+  .dest text{fill:var(--item);font:500 16px var(--sans);text-anchor:middle}
+  .dest .glyph{fill:none;stroke:var(--item);stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
+  .dest{transition:opacity .4s}
+  .dest.allowed .glyph{stroke:var(--green-line)} .dest.allowed text{fill:var(--green)}
+  .dest.hit{animation:pulse .6s ease}
+  .msg{opacity:0}
+  .shut{opacity:0}
+  .shut.go{animation:shut .9s ease}
+  .ripple{opacity:0}
+  .ripple.go{animation:ripple .7s ease}
+
+  /* robots */
+  #agent,#guard{transition:transform .3s ease}
+  .r-head{stroke-width:1.4}
+  .agent .r-head{fill:var(--blue);stroke:var(--blue-dk)}
+  .guard .r-head{fill:var(--purple);stroke:var(--purple-dk)}
+  .r-screen{fill:#0a1830} .r-eye{fill:#eaf1ff}
+  .agent .r-arm{fill:var(--blue)} .guard .r-arm{fill:var(--purple)}
+  .agent .r-body,.agent .r-foot{fill:var(--blue-dk)} .guard .r-body,.guard .r-foot{fill:var(--purple-dk)}
+  .agent .r-ant{stroke:var(--blue-dk)} .guard .r-ant{stroke:var(--purple-dk)}
+  .agent .r-ball{fill:var(--blue)} .guard .r-ball{fill:var(--purple)}
+  .guard .cap{fill:var(--purple-dk)}
+  .clip{fill:var(--card);stroke:var(--item);stroke-width:1.4}
+  .clip-line{stroke:var(--muted);stroke-width:1.3}
+  .bob{transform-box:fill-box;transform-origin:center;animation:breathe 3.6s ease-in-out infinite}
+  .eye{transform-box:fill-box;transform-origin:center;animation:blink 4.6s infinite}
+  .hand{opacity:0}.hand.go{animation:hand 1s ease}
+
+  /* panels */
+  .panels{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px}
+  .allow{flex:1;min-width:210px;border:1px solid var(--frame);border-radius:12px;padding:12px 14px;background:var(--card)}
+  .allow h4{margin:0 0 9px;font:700 12px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .allow .row{display:flex;flex-wrap:wrap;gap:7px}
+  .allow .a{display:inline-flex;align-items:center;gap:6px;font:600 14px var(--sans);color:var(--green);
+    background:var(--green-soft);border:1.5px solid var(--green-line);border-radius:999px;padding:5px 11px}
+  .allow .a .c{font-weight:800}
+  .allow .hint{margin-top:9px;font:400 12.5px var(--sans);color:var(--muted)}
+  .log{flex:1;min-width:210px;border-radius:12px;background:var(--log-bg);padding:12px 14px;color:var(--log-ink);font:600 13px/1.7 var(--mono);overflow:hidden}
+  .log .cmd{color:#7da2ff;margin-bottom:6px}
+  .log .ln .ok{color:#6ee7a8} .log .ln .no{color:#ff8a7a}
+  .log .empty{color:var(--faint);font-weight:400}
+
+  .bx-narr{margin:16px 2px 10px;min-height:22px;font-size:16px;color:var(--muted)}
+  .bx-out{border-left:4px solid var(--blue);background:var(--chip);border-radius:0 10px 10px 0;padding:0 16px;max-height:0;opacity:0;overflow:hidden;transition:all .45s cubic-bezier(.22,1,.36,1)}
+  .bx-out.show{max-height:160px;opacity:1;padding:13px 16px}
+  .bx-out.ok{border-left-color:var(--ok);background:var(--ok-bg)} .bx-out.warn{border-left-color:var(--warn-line);background:var(--warn-bg)}
+  .bx-out .label{font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px}
+  .bx-out.ok .label{color:var(--ok)} .bx-out.warn .label{color:var(--warn)} .bx-out b{color:var(--ink)}
+  .bx-out .addbtn{margin-top:9px;font:700 13px var(--sans);color:#fff;background:var(--purple);border:0;border-radius:8px;padding:8px 13px;cursor:pointer}
+
+  .bx-ask{margin-top:18px}
+  .bx-ask .eyebrow{font:800 12px var(--sans);letter-spacing:.12em;color:var(--faint);text-transform:uppercase;margin-bottom:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{display:inline-flex;align-items:center;gap:8px;font:600 15px var(--sans);color:var(--chip-ink);background:var(--chip);border:1.5px solid transparent;border-radius:999px;padding:10px 16px;cursor:pointer}
+  .chip:hover{border-color:var(--blue)} .chip[disabled]{opacity:.55;cursor:progress}
+  .chip .tick{width:18px;height:18px;border-radius:50%;background:var(--green);color:#fff;display:none;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+  .chip.done .tick{display:inline-flex}
+
+  .bx-text{display:none;padding:4px 2px}
+  .box-widget.textmode .bx-stage,.box-widget.textmode .bx-narr,.box-widget.textmode .bx-out,.box-widget.textmode .panels{display:none}
+  .box-widget.textmode .bx-text{display:block}
+  .bx-text h4{margin:12px 0 6px;font-size:15px}.bx-text p{margin:0 0 4px;color:var(--muted);font-size:15px;line-height:1.5}
+
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+  @keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+  @keyframes pulse{0%,100%{transform:scale(1)}40%{transform:scale(1.2)}}
+  @keyframes shut{0%{opacity:0;transform:scaleY(.2)}25%{opacity:1;transform:scaleY(1)}80%{opacity:1}100%{opacity:0}}
+  @keyframes ripple{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+  @keyframes hand{0%{opacity:0;transform:translateY(5px)}25%{opacity:1;transform:translateY(0)}80%{opacity:1}100%{opacity:0}}
+
+  @media (prefers-reduced-motion: reduce){
+    #agent,#guard,.msg{transition:opacity .3s ease}
+    .bob,.eye{animation:none !important}
+    .dest.hit,.shut.go,.ripple.go,.hand.go{animation:none;opacity:1}
+    .bx-out{transition:opacity .3s}
+  }
+  @media (max-width:430px){ .bx-body{padding:14px} .chip{font-size:14px;padding:9px 13px} }
+</style>
+</head>
+<body style="margin:0;padding:24px;background:var(--bg,#fff)">
+
+<div class="box-widget" id="widget">
+  <div class="bx-head">
+    <div class="bx-title"><span class="dot" aria-hidden="true"></span> THE DOOR</div>
+    <div class="links">
+      <button class="link" id="btnReset" type="button">Reset</button>
+      <button class="link" id="btnText" type="button" aria-pressed="false">Text version</button>
+    </div>
+  </div>
+
+  <div class="bx-body">
+    <div class="bx-stage">
+      <svg viewBox="0 0 480 330" role="img" aria-label="The agent inside a sandbox, a guard at the one door out, and four places on the internet.">
+        <text class="net-label" x="18" y="24">The internet</text>
+
+        <!-- destinations -->
+        <g class="dest allowed" id="dAi" transform="translate(76,66)">
+          <g class="glyph" transform="scale(1.5)"><path d="M0 -11 L3 -3 L11 0 L3 3 L0 11 L-3 3 L-11 0 L-3 -3 Z"/></g>
+          <text y="32">AI model</text></g>
+        <g class="dest allowed" id="dGh" transform="translate(190,66)">
+          <g class="glyph" transform="scale(1.5)"><path d="M-5 -7 L-11 0 L-5 7 M5 -7 L11 0 L5 7 M2 -9 L-2 9"/></g>
+          <text y="32">GitHub</text></g>
+        <g class="dest" id="dNews" transform="translate(300,66)">
+          <g class="glyph" transform="scale(1.5)"><circle cx="0" cy="0" r="10"/><path d="M-10 0 H10 M0 -10 C-6 -5 -6 5 0 10 C6 5 6 -5 0 -10"/></g>
+          <text y="32">News site</text></g>
+        <g class="dest" id="dSketchy" transform="translate(414,66)">
+          <g class="glyph" transform="scale(1.5)"><path d="M0 -11 L11 9 H-11 Z"/><path d="M0 -3 V3 M0 6 V6.5"/></g>
+          <text y="32">Sketchy site</text></g>
+
+        <!-- sandbox with a door gap at the top (x216..264) -->
+        <path class="sandbox-box" d="M216 150 H28 Q14 150 14 164 V300 Q14 314 28 314 H452 Q466 314 466 300 V164 Q466 150 452 150 H264"/>
+        <text class="sandbox-label" x="30" y="176">Sandbox</text>
+
+        <!-- door shut bar (blocked) -->
+        <rect class="shut" id="shut" x="216" y="146" width="48" height="10" rx="3" fill="var(--warn-line)"/>
+        <rect class="ripple" id="ripple" x="206" y="138" width="68" height="26" rx="8" fill="none" stroke="var(--purple)" stroke-width="3"/>
+
+        <!-- door bar -->
+        <rect class="door-bar" x="216" y="146" width="48" height="9" rx="3"/>
+
+        <!-- GUARD at the door -->
+        <g class="guard" id="guard" transform="translate(240,150)">
+          <g class="bob">
+            <line class="r-ant" x1="0" y1="-30" x2="0" y2="-39"/>
+            <rect class="r-ball" x="-3.5" y="-45" width="7" height="7" rx="1.6"/>
+            <rect class="r-arm" x="-4" y="-4" width="8" height="8" rx="1.8" transform="translate(-24 -2) rotate(-40)"/>
+            <rect class="r-arm" x="-4" y="-4" width="8" height="8" rx="1.8" transform="translate(24 -2) rotate(40)"/>
+            <rect class="r-foot" x="-12" y="5" width="9" height="15" rx="3"/>
+            <rect class="r-foot" x="3" y="5" width="9" height="15" rx="3"/>
+            <rect class="r-head" x="-20" y="-31" width="40" height="40" rx="9"/>
+            <rect class="cap" x="-17" y="-40" width="34" height="8" rx="2.5"/>
+            <rect class="cap" x="-19" y="-34" width="44" height="3.5" rx="1.5"/>
+            <rect class="r-screen" x="-15" y="-22" width="30" height="18" rx="3.5"/>
+            <rect class="r-eye eye" x="-9" y="-16.5" width="6" height="6" rx="1.4"/>
+            <rect class="r-eye eye" x="3" y="-16.5" width="6" height="6" rx="1.4"/>
+            <rect class="r-body" x="-4" y="1" width="8" height="2.8" rx="1.4"/>
+            <!-- clipboard (the allow list) -->
+            <g transform="translate(-34 -8)"><rect class="clip" x="-7" y="-9" width="14" height="18" rx="2"/>
+              <path class="clip-line" d="M-4 -4 H4 M-4 0 H4 M-4 4 H2"/></g>
+          </g>
+          <g class="hand" id="hand" transform="translate(0,-54)">
+            <circle r="11" fill="var(--warn-bg)" stroke="var(--warn-line)" stroke-width="2"/>
+            <text x="0" y="5" text-anchor="middle" font="800 15px var(--sans)" fill="var(--warn)">✋</text>
+          </g>
+        </g>
+
+        <!-- AGENT inside the box -->
+        <g class="agent" id="agent" transform="translate(80,268)">
+          <g class="bob">
+            <line class="r-ant" x1="0" y1="-30" x2="0" y2="-39"/>
+            <rect class="r-ball" x="-3.5" y="-45" width="7" height="7" rx="1.6"/>
+            <rect class="r-arm" x="-4" y="-4" width="8" height="8" rx="1.8" transform="translate(-24 -2) rotate(-40)"/>
+            <rect class="r-arm" x="-4" y="-4" width="8" height="8" rx="1.8" transform="translate(24 -2) rotate(40)"/>
+            <rect class="r-foot" x="-12" y="5" width="9" height="15" rx="3"/>
+            <rect class="r-foot" x="3" y="5" width="9" height="15" rx="3"/>
+            <rect class="r-head" x="-20" y="-31" width="40" height="40" rx="9"/>
+            <rect class="r-screen" x="-15" y="-24" width="30" height="18" rx="3.5"/>
+            <rect class="r-eye eye" x="-9" y="-18.5" width="6" height="6" rx="1.4"/>
+            <rect class="r-eye eye" x="3" y="-18.5" width="6" height="6" rx="1.4"/>
+            <rect class="r-body" x="-4" y="-1" width="8" height="2.8" rx="1.4"/>
+          </g>
+        </g>
+
+        <!-- message packet (drawn last = always on top) -->
+        <g class="msg" id="msg" opacity="0"><circle r="9" fill="var(--blue)" stroke="var(--card)" stroke-width="2.5"/></g>
+      </svg>
+    </div>
+
+    <div class="panels">
+      <div class="allow" aria-live="polite">
+        <h4>The guard's allow list</h4>
+        <div class="row" id="allowRow"></div>
+        <div class="hint">Only you can change this list. You’re outside the box; the agent is inside.</div>
+      </div>
+      <div class="log" aria-hidden="true">
+        <div class="cmd">$ sbx policy log</div>
+        <div id="logRows"><div class="empty">no requests yet</div></div>
+      </div>
+    </div>
+
+    <p class="bx-narr" id="narr" aria-live="polite">The box has one door, and a guard checks a list before anything goes out. Send a message.</p>
+    <div class="bx-out" id="outcome" aria-live="polite" role="status"><span class="label" id="outLabel"></span><span id="outText"></span></div>
+
+    <div class="bx-text" id="textVersion" aria-live="polite"></div>
+
+    <div class="bx-ask">
+      <div class="eyebrow">Send a message to…</div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const widget=$('widget'), agent=$('agent'), guard=$('guard'), msg=$('msg');
+  const narr=$('narr'), outcome=$('outcome'), outLabel=$('outLabel'), outText=$('outText');
+  const chipsWrap=$('chips'), allowRow=$('allowRow'), logRows=$('logRows');
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  const AGENT=[80,268], DOOR=[240,150];
+  const DESTS={
+    ai:{el:$('dAi'),x:76,y:66, name:'AI model', back:'“Here’s how to fix that bug.”'},
+    github:{el:$('dGh'),x:190,y:66, name:'GitHub', back:'“Your pull request is open.”'},
+    news:{el:$('dNews'),x:300,y:66, name:'News site'},
+    sketchy:{el:$('dSketchy'),x:414,y:66, name:'Sketchy site'},
+  };
+  let allow=new Set(['ai','github']);
+  let busy=false, log=[];
+
+  const wait=ms=>new Promise(r=>setTimeout(r, reduce.matches?Math.min(ms,100):ms));
+  const fire=(el,c)=>{el.classList.remove(c);void el.offsetWidth;el.classList.add(c);};
+  const at=(el,x,y)=>el.setAttribute('transform',`translate(${x},${y})`);
+  let mpos=[AGENT[0],AGENT[1]-34];
+  function placeMsg(x,y,show){ if(msg.getAnimations) msg.getAnimations().forEach(a=>a.cancel()); mpos=[x,y]; msg.setAttribute('transform',`translate(${x},${y})`); msg.style.opacity=show?'1':'0'; }
+  function msgFill(c){ const ci=msg.querySelector('circle'); if(ci) ci.setAttribute('fill',c); }
+  async function msgTo(x,y,ms){ msg.style.opacity='1';
+    const a=msg.animate([{transform:`translate(${mpos[0]}px,${mpos[1]}px)`},{transform:`translate(${x}px,${y}px)`}],
+      {duration:reduce.matches?70:ms, easing:'cubic-bezier(.45,0,.25,1)'});
+    try{await a.finished;}catch(e){}
+    try{a.cancel();}catch(e){}
+    msg.setAttribute('transform',`translate(${x},${y})`); mpos=[x,y]; }
+
+  function renderAllow(){
+    allowRow.innerHTML='';
+    ['ai','github','news','sketchy'].filter(k=>allow.has(k)).forEach(k=>{
+      const s=document.createElement('span'); s.className='a';
+      s.innerHTML=`<span class="c">✓</span>${DESTS[k].name}`; allowRow.appendChild(s);
+    });
+    // reflect allowed styling on destinations
+    for(const k in DESTS){ DESTS[k].el.classList.toggle('allowed', allow.has(k)); }
+  }
+  function addLog(k,ok){
+    log.push({k,ok});
+    logRows.innerHTML=log.slice(-4).map(r=>`<div class="ln">→ ${DESTS[r.k].name}: <span class="${r.ok?'ok':'no'}">${r.ok?'ALLOWED':'DENIED'}</span></div>`).join('');
+  }
+  function clearOut(){ outcome.className='bx-out'; outLabel.textContent=''; outText.innerHTML=''; }
+  function showOut(kind,text,addKey){
+    outcome.className='bx-out show '+(kind==='warn'?'warn':'ok');
+    outLabel.textContent = kind==='warn' ? 'Blocked' : 'Allowed';
+    outText.innerHTML=text;
+    if(addKey){
+      const b=document.createElement('button'); b.className='addbtn'; b.type='button';
+      b.textContent=`Add ${DESTS[addKey].name} to the allow list`;
+      b.onclick=()=>{ if(busy)return; allow.add(addKey); renderAllow();
+        narr.textContent=`You added ${DESTS[addKey].name} to the list. Now the guard will let it through.`;
+        clearOut(); };
+      outText.appendChild(document.createElement('br')); outText.appendChild(b);
+    }
+  }
+
+  async function send(k){
+    if(busy)return; busy=true;
+    chipsWrap.querySelectorAll('.chip').forEach(c=>c.disabled=true);
+    clearOut();
+    const d=DESTS[k]; const ok=allow.has(k);
+    narr.textContent=`The agent sends a message to ${d.name}…`;
+    msgFill('var(--blue)');
+    placeMsg(AGENT[0], AGENT[1]-34, true); await wait(80);
+    await msgTo(DOOR[0], DOOR[1]+2, 700);              // agent -> the door
+    if(ok){
+      await msgTo(d.x, d.y+14, 620);                   // through the door -> destination
+      fire(d.el,'hit'); await wait(380);
+      msgFill('var(--green-line)');                    // answer comes back
+      await msgTo(DOOR[0], DOOR[1]+2, 500);
+      await msgTo(AGENT[0], AGENT[1]-34, 620);
+      msg.style.opacity='0';
+      addLog(k,true);
+      showOut('ok', `On the list. The message goes out and the answer comes back: <b>${d.back||'done.'}</b>`);
+    } else {
+      // guard shuts the door, message bounces back
+      fire($('shut'),'go'); fire($('ripple'),'go'); fire($('hand'),'go');
+      await wait(340);
+      await msgTo(AGENT[0], AGENT[1]-34, 560);         // bounce back to the agent
+      msg.style.opacity='0';
+      addLog(k,false);
+      const kind = k==='sketchy' ? 'warn':'warn';
+      const tail = k==='sketchy'
+        ? `The site never hears from the agent — that’s the guard doing its job.`
+        : `The site never hears from the agent. The guard hands back a note: “Blocked: not on the list.”`;
+      showOut('warn', `<b>${d.name}</b> isn’t on the list, so the guard keeps the door shut. ${tail}`, k==='news'?'news':null);
+    }
+    msg.style.transition='';
+    markDone(k);
+    await wait(500);
+    chipsWrap.querySelectorAll('.chip').forEach(c=>c.disabled=false);
+    busy=false;
+  }
+  function markDone(k){ const c=chipsWrap.querySelector(`[data-k="${k}"]`); if(c)c.classList.add('done'); }
+
+  function reset(){
+    if(busy)return;
+    allow=new Set(['ai','github']); log=[];
+    logRows.innerHTML='<div class="empty">no requests yet</div>';
+    chipsWrap.querySelectorAll('.chip').forEach(c=>c.classList.remove('done'));
+    clearOut(); renderAllow();
+    narr.textContent='The box has one door, and a guard checks a list before anything goes out. Send a message.';
+  }
+
+  // build chips
+  [['ai','AI model'],['github','GitHub'],['news','News site'],['sketchy','Sketchy site']].forEach(([k,label])=>{
+    const b=document.createElement('button'); b.className='chip'; b.type='button'; b.dataset.k=k;
+    b.innerHTML=`<span class="tick" aria-hidden="true">✓</span>${label}`;
+    b.addEventListener('click',()=>send(k)); chipsWrap.appendChild(b);
+  });
+
+  // text version
+  (function(){ const tv=$('textVersion');
+    tv.innerHTML='<h4>One door out, with a guard</h4>'+
+      '<p>The sandbox has a single way out. A guard (a network proxy) checks every request against an allow list.</p>'+
+      '<p><b>AI model, GitHub</b> — on the list: the message goes out and the answer comes back.</p>'+
+      '<p><b>News site</b> — not on the list: blocked. You can add it to the list if the agent needs it.</p>'+
+      '<p><b>Sketchy site</b> — not on the list: blocked. The guard did its job.</p>'+
+      '<p>Only you can change the list — you’re outside the box, and so is the list.</p>';
+  })();
+
+  $('btnReset').addEventListener('click',reset);
+  const bt=$('btnText');
+  bt.addEventListener('click',()=>{ const on=widget.classList.toggle('textmode'); bt.setAttribute('aria-pressed',on); bt.textContent=on?'Picture version':'Text version'; });
+
+  renderAllow(); placeMsg(AGENT[0],AGENT[1]-34,false);
+})();
+</script>
+</body>
+</html>

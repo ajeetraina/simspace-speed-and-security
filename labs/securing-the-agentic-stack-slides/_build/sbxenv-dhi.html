@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --blue:#1D63ED; --ink:#0b0c10; --muted:#5b6472; --body:#3d434e;
+    --code-bg:#0f131b; --code-border:#1e2a44;
+    --ckey:#7da2ff; --cval:#8fe3b0; --ccom:#7f8ba3; --cpun:#aeb8c9;
+    --sans:"Helvetica Neue",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1600px;height:900px;background:#fff;font-family:var(--sans);color:var(--ink);overflow:hidden}
+  .stage{position:relative;width:1600px;height:900px;padding:72px 104px 0}
+  .eyebrow{font:800 15px/1 var(--mono);letter-spacing:.22em;color:var(--blue)}
+  h1{margin-top:16px;font-size:46px;font-weight:800;letter-spacing:-.01em;line-height:1.08;max-width:85%}
+
+  .row{display:flex;gap:56px;margin-top:40px;align-items:flex-start}
+
+  /* code block */
+  .code{width:49%;background:var(--code-bg);border:1px solid var(--code-border);border-radius:16px;
+        padding:30px 34px}
+  pre{margin:0;font:600 20px/1.75 var(--mono);color:var(--cpun);white-space:pre}
+  .k{color:var(--ckey)} .v{color:var(--cval)} .c{color:var(--ccom)}
+
+  /* annotations */
+  .anno{flex:1;padding-top:4px}
+  .ann{margin-bottom:30px}
+  .ann b{display:block;font-size:27px;font-weight:800;color:var(--ink)}
+  .ann span{display:block;margin-top:7px;font-size:19px;line-height:1.45;color:var(--muted)}
+
+  .foot{position:absolute;left:104px;right:104px;bottom:52px;
+        font:800 14px/1 var(--mono);letter-spacing:.14em;color:var(--muted)}
+  .foot b{color:var(--blue);font-weight:800}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="eyebrow">CAPACITY</div>
+  <h1>An environment file describes the whole sandbox</h1>
+
+  <div class="row">
+    <div class="code"><pre><span class="c"># sbxenv.yaml — committed to the repo</span>
+<span class="k">schemaVersion</span>: <span class="v">"1"</span>
+<span class="k">name</span>: <span class="v">product-catalog</span>
+<span class="k">agent</span>: <span class="v">claude</span>
+<span class="k">workspace</span>: <span class="v">.</span>
+<span class="k">kits</span>:
+  - <span class="v">git+…/dhi-mixin</span>   <span class="c"># pins DHI, denies 3rd-party</span>
+<span class="k">secrets</span>:
+  <span class="k">dhi-mcp-pat</span>:
+    <span class="k">ref</span>: <span class="v">op://Engineering/DockerHub/pat</span>
+    <span class="k">snapshot</span>: <span class="v">true</span></pre></div>
+
+    <div class="anno">
+      <div class="ann"><b>Agent</b><span>Which harness the sandbox runs</span></div>
+      <div class="ann"><b>Workspace</b><span>The project folder the agent can see</span></div>
+      <div class="ann"><b>Kits</b><span>The dhi-mixin pins DHI and denies 3rd-party registries — tools, credentials, and network rules in one artifact</span></div>
+      <div class="ann"><b>Secrets</b><span>A source, not a value — the Docker Hub PAT resolved on each host, never committed</span></div>
+    </div>
+  </div>
+
+  <div class="foot">START IT WITH <b>sbx env run</b> &middot; EXPERIMENTAL, FORMAT MAY CHANGE</div>
+</div>
+</body>
+</html>

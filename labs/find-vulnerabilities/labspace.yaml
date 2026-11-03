@@ -1,0 +1,51 @@
+title: "Control"
+description: >
+  Decide what the boxed agent is allowed to reach. Pick a network policy profile,
+  add allow and deny rules on top, and read the policy log to see exactly what the
+  agent tried to connect to - and what the boundary stopped. Fully simulated;
+  nothing to install.
+
+catalog:
+  icon: policy
+  description: "Decide what the agent can reach: pick a network policy profile, add allow/deny rules, and read the policy log."
+  tags: ["sandbox", "network policy", "allow-deny", "governance", "audit", "control"]
+  estimatedMinutes: 20
+  order: 3
+
+simulator: simulator.yaml
+
+terminals:
+  - id: host
+    title: Terminal
+    icon: terminal
+
+files:
+  README.md: |
+    # Control - lab workspace
+
+    Pillar two of four. Containment is always on; Control is what you tune. The
+    agent is already boxed - now you decide which network endpoints it may reach.
+    Pick a profile, add allow/deny rules, and read the policy log to see exactly
+    what it tried.
+
+    Everything is scripted - no real sbx or network - so every learner sees the
+    same result.
+  product-catalog-demo-showcase/package.json: |
+    {
+      "name": "product-catalog",
+      "version": "1.0.0",
+      "scripts": { "start": "node src/index.js" }
+    }
+
+sections:
+  - title: "What the Agent Can Reach"
+    contentPath: 00-what-it-can-reach.md
+  - title: "Check an Endpoint"
+    contentPath: 01-check-an-endpoint.md
+  - title: "Allow and Deny"
+    contentPath: 02-allow-and-deny.md
+  - title: "Read the Policy Log"
+    contentPath: 03-policy-log.md
+
+variables:
+  org: your-org

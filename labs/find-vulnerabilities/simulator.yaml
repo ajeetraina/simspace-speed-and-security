@@ -1,0 +1,179 @@
+version: "2.0"
+
+metadata:
+  id: find-vulnerabilities
+  title: "Control"
+  summary: >
+    Decide what the boxed agent can reach. See the active policy, check an endpoint
+    before you run, add allow and deny rules, and read the policy log. Output
+    mirrors real sbx v0.45.x (verified live): policy profile/ls/check/allow/deny/log.
+
+# `net.inventoryAllowed` flips to true once an allow rule is added for the
+# internal inventory service, so the re-check flips from Denied to Allowed.
+state:
+  org: "your-org"
+  net:
+    inventoryAllowed: false
+
+settings:
+  pace:
+    boot: 900
+    call: 500
+    check: 400
+
+defaults:
+  unmatched:
+    stderr: ["command not found - this command isn't part of the lab."]
+    exit: 1
+
+scenarios:
+  - id: sbx-version
+    when:
+      command: [sbx, version]
+    then:
+      output:
+        - "sbx version: v0.45.1 9d79d90ee4c5d297fb3d36b75384e8cea7a4fbcb"
+
+  # `sbx run` boots the box through the proxy. Output mirrors real sbx (verified);
+  # machine-specific values are fixed so every learner sees the same result.
+  - id: sbx-run
+    when:
+      command: [sbx, run, claude]
+    then:
+      output:
+        - "── RESOLVE SETUP"
+        - "   resolving configuration…"
+        - "     sandbox    demo"
+        - "     agent      claude"
+        - "     workspace  ~/product-catalog-demo-showcase (rw)"
+        - "     skills     agent-skills → /home/agent/.claude/skills · 5 folders · (ro)"
+        - "     image      docker/sandbox-templates:claude-code-docker"
+        - "     cpu        8"
+        - "     memory     8 GiB"
+        - { text: "   ✓ configuration resolved", delay: call }
+        - "── PREPARE IMAGE"
+        - "   → pull docker/sandbox-templates:claude-code-docker"
+        - { text: "   ✓ image ready", delay: boot }
+        - "── CREATE SANDBOX"
+        - "   ✓ Created sandbox demo"
+        - ""
+        - "Starting claude agent in sandbox 'demo'..."
+        - "Workspace: ~/product-catalog-demo-showcase"
+
+  # ===========================================================================
+  # Section 1 - What the agent can reach. Profiles are a REMOTE-GOVERNANCE
+  # feature; a default install has none, so `profile ls` reports none and you
+  # shape access with rules on top of deny-by-default (seen via `policy ls`).
+  # ===========================================================================
+  - id: sbx-policy-profile-ls
+    when:
+      command: [sbx, policy, profile, ls]
+    then:
+      output:
+        - "No policy profiles found"
+
+  - id: sbx-policy-ls
+    when:
+      command: [sbx, policy, ls]
+    then:
+      output:
+        - "POLICY         SOURCE   APPLIES TO   SUMMARY"
+        - "local-policy   local    all          network: 6 allow; filesystem read: 1 allow; filesystem write: 1 allow"
+
+  # ===========================================================================
+  # Section 2 - Check an endpoint before you run (read-only).
+  # ===========================================================================
+  - id: sbx-policy-check-allowed
+    when:
+      command: [sbx, policy, check, network]
+      state: { net.inventoryAllowed: true }
+    then:
+      output:
+        - { text: "Allowed: inventory.internal:8080", delay: check }
+        - "Governance: Local policy only"
+        - "Context: global"
+
+  - id: sbx-policy-check
+    when:
+      command: [sbx, policy, check, network]
+    then:
+      output:
+        - { text: "Denied: inventory.internal:8080", delay: check }
+        - "Governance: Local policy only"
+        - "Context: global"
+        - "Reason: no matching allow rule (default deny)"
+
+  # ===========================================================================
+  # Section 3 - Allow and deny rules. (Rule IDs are representative.)
+  # ===========================================================================
+  - id: sbx-policy-allow
+    when:
+      command: [sbx, policy, allow, network]
+    then:
+      state: { net.inventoryAllowed: true }
+      output:
+        - "Rule added to policy local (scope: global): aaf99fc1-40c5-4194-a2d3-a5965b2fbc4b (inventory.internal [tcp])"
+
+  - id: sbx-policy-deny
+    when:
+      command: [sbx, policy, deny, network]
+    then:
+      output:
+        - "Rule added to policy local (scope: global): 5304e811-6caa-4e18-85d8-43e7f782ce3c (telemetry.vendor.example [tcp,udp])"
+
+  # ===========================================================================
+  # Section 4 - The policy log (Blocked / Allowed request tables).
+  # ===========================================================================
+  - id: sbx-policy-log
+    when:
+      command: [sbx, policy, log]
+    then:
+      output:
+        - "Blocked requests:"
+        - "SANDBOX   TYPE      HOST                           PROXY     RULE   REASON                                  LAST SEEN         COUNT"
+        - "demo      network   inventory.internal:8080        forward   -      No matching allow rule (default deny)   06:50:14 12-Oct   4"
+        - "demo      network   telemetry.vendor.example:443   forward   -      denied by local rule                    06:51:02 12-Oct   3"
+        - ""
+        - "Allowed requests:"
+        - "SANDBOX   TYPE      HOST                      PROXY     RULE   REASON   LAST SEEN         COUNT"
+        - "demo      network   api.anthropic.com:443     forward   -      -        06:51:20 12-Oct   5"
+        - "demo      network   registry.npmjs.org:443    forward   -      -        06:51:05 12-Oct   2"
+        - "demo      network   inventory.internal:8080   forward   -      -        06:51:22 12-Oct   1"
+
+  # ===========================================================================
+  # Agent sessions + filler.
+  # ===========================================================================
+  - id: claude-session
+    when:
+      command: [claude]
+    then:
+      session:
+        prompt: "claude> "
+        intro:
+          - "Claude Code ready. Enter a task, or type /exit to leave."
+        outro:
+          - "Claude session ended."
+
+  - id: agent-fallback
+    when:
+      agent: true
+    then:
+      output:
+        - "● I run behind the proxy. Try `sbx policy check network inventory.internal:8080`,"
+        - "  then `sbx policy allow network inventory.internal`, then check again."
+
+  - id: cd
+    when:
+      command: [cd]
+    then:
+      output:
+        - "Note: this simulated terminal has no working directory - every command runs from the lab root."
+
+  - id: sbx-policy-generic
+    when:
+      command: [sbx, policy]
+    then:
+      output:
+        - "sbx policy manages what sandboxes can reach. Try: `sbx policy ls`,"
+        - "  `sbx policy check network <host>`, `sbx policy allow network <host>`,"
+        - "  `sbx policy deny network <host>`, or `sbx policy log`."

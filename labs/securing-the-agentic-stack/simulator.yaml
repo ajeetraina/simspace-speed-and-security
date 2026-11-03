@@ -1,0 +1,287 @@
+version: "2.0"
+
+metadata:
+  id: securing-the-agentic-stack
+  title: "Choice"
+  summary: >
+    A locked-down sandbox still has to be useful. Register the Docker Hardened
+    Images (DHI) MCP server, lock it into the box with --static-mcp, and watch the
+    boxed agent query the DHI catalog before it picks a 0-CVE base - then pin it
+    with the dhi-mixin kit, which denies 3rd-party registries at the network edge.
+    All simulated with real sbx commands (mcp add/inspect/ls/auth, run --static-mcp,
+    kit inspect/add, policy check).
+
+# `mcp.added` flips once the DHI MCP server is registered; `mcp.authorized` once
+# it is authorized through the control plane.
+state:
+  org: "your-org"
+  kit:
+    attached: false # the demo sandbox has been created (via --static-mcp)
+  mcp:
+    added: false
+    authorized: false
+
+settings:
+  pace:
+    boot: 900 # simulated microVM boot
+    pull: 700 # simulated layer download
+    build: 900 # simulated build step
+    scan: 1100 # simulated DHI catalog / CVE lookup
+
+defaults:
+  unmatched:
+    stderr: ["command not found - this command isn't part of the lab."]
+    exit: 1
+
+scenarios:
+  - id: sbx-version
+    when:
+      command: [sbx, version]
+    then:
+      output:
+        - "sbx version: v0.45.1 9d79d90ee4c5d297fb3d36b75384e8cea7a4fbcb"
+
+  # ===========================================================================
+  # Section 6 - Pin it to DHI with the dhi-mixin kit. Inspect output and deny
+  # count verified live against sbx v0.48 (`sbx kit inspect`: 1 allow, 7 deny).
+  # The DHI-specific kit inspect MUST precede the generic sbx-kit-inspect below
+  # (first-match-wins, top to bottom). The deny is the kit's, so a third-party
+  # registry check reads Denied.
+  # ===========================================================================
+  - id: sbx-kit-inspect-dhi
+    when:
+      command: [sbx, kit, inspect]
+      args: { 0: "git+https://github.com/ajeetraina/docker-cloud-sandboxes-demo.git#dir=agent-cli/codex-dhi/dhi-mixin" }
+    then:
+      output:
+        - "  Name:           dhi-mixin"
+        - "  Kind:           mixin"
+        - "  Schema:         v3"
+        - "  Display:        Docker Hardened Images (DHI)"
+        - "  Description:    Wires an agent to the hosted Docker Hardened Images MCP server (dhi.io), steers it to prefer DHI for hardened base images, and denies 3rd party registries at the network edge."
+        - ""
+        - "  Policies:"
+        - "    Network:      1 allow, 7 deny"
+        - "    Credentials:  2 sources"
+        - "    Environment:  1 variables, 0 proxy-managed"
+        - "    Commands:     0 install, 1 startup, 1 init files"
+
+  - id: sbx-kit-add-dhi
+    when:
+      command: [sbx, kit, add]
+    then:
+      output:
+        - { text: "  ✓ sandbox demo — started", delay: scan }
+        - "  KITS"
+        - "    ✓ dhi-mixin — built"
+        - { text: "  Recreating 'demo' with kit: dhi-mixin…", delay: boot }
+        - "    workspace and session state preserved"
+        - "  ✓ demo ready — dhi-mixin active: DHI MCP registered · dhi.io allowed · 3rd-party registries denied"
+
+  - id: sbx-policy-check-cgr
+    when:
+      command: [sbx, policy, check, network]
+      args: { 0: { oneOf: [cgr.dev, "*.cgr.dev", chainguard.dev, "*.chainguard.dev", wolfi.dev, "*.wolfi.dev", apk.dag.dev] } }
+    then:
+      output:
+        - { text: "Denied: {{ args.0 }}", delay: scan }
+        - "Governance: Local policy only"
+        - "Context: global"
+        - "Reason: denied by dhi-mixin (3rd-party registry block); deny beats allow"
+
+  # ===========================================================================
+  # Section 1 - Register the DHI MCP server. Positional 0 = name, --url = URL.
+  # ===========================================================================
+  - id: sbx-mcp-add
+    when:
+      command: [sbx, mcp, add]
+      args: { 0: { any: true }, --url: { any: true } }
+    then:
+      state: { mcp.added: true }
+      output:
+        - "Added MCP server '{{ args.0 }}' (remote) -> {{ args.url }}"
+        - "  transport: streamable-http"
+        - "  its tools are available to agents in the sandbox, governed by your MCP policy."
+        - ""
+        - "It's registered, not yet attached. Authorize it, then run with --static-mcp."
+
+  - id: sbx-mcp-inspect
+    when:
+      command: [sbx, mcp, inspect]
+      args: { 0: { any: true } }
+    then:
+      output:
+        - "Name:      {{ args.0 }}"
+        - "Type:      remote"
+        - "URL:       https://dhi.io/mcp"
+        - "Transport: streamable-http"
+        - "Tools:     dhi_list_repositories, dhi_get_tag_definition,"
+        - "           dhi_get_image_cves, dhi_get_image_attestations"
+
+  - id: sbx-mcp-ls-added
+    when:
+      command: [sbx, mcp, ls]
+      state: { mcp.added: true }
+    then:
+      output:
+        - "NAME        TYPE     URL"
+        - "remotedhi   remote   https://dhi.io/mcp"
+        - ""
+        - "1 MCP server configured."
+
+  - id: sbx-mcp-ls
+    when:
+      command: [sbx, mcp, ls]
+    then:
+      output:
+        - "No MCP servers configured. Add one with: sbx mcp add <name> --url <url>"
+
+  # ===========================================================================
+  # Section 3 - Attach and authorize. `auth status` first (more specific), then
+  # `auth <server>`.
+  # ===========================================================================
+  - id: sbx-mcp-auth-status-authed
+    when:
+      command: [sbx, mcp, auth, status]
+      state: { mcp.authorized: true }
+    then:
+      output:
+        - "SERVER      STATUS        VIA"
+        - "remotedhi   authorized    hosted MCP control plane (OAuth)"
+
+  - id: sbx-mcp-auth-status
+    when:
+      command: [sbx, mcp, auth, status]
+    then:
+      output:
+        - "SERVER      STATUS           VIA"
+        - "remotedhi   not authorized   run: sbx mcp auth remotedhi"
+
+  - id: sbx-mcp-auth
+    when:
+      command: [sbx, mcp, auth]
+      args: { 0: { any: true } }
+    then:
+      state: { mcp.authorized: true }
+      output:
+        - { text: "Authorizing '{{ args.0 }}' through the hosted MCP control plane...", delay: scan }
+        - "  OAuth complete. The credential is held centrally - never written into the sandbox."
+        - ""
+        - "Authorized. Attach it to a sandbox with: sbx run claude --static-mcp remotedhi"
+
+  # ===========================================================================
+  # Section 2/3 - Create the box with DHI locked in (--static-mcp), then the agent
+  # uses it. The --static-mcp run creates 'demo'; the plain run is a fallback.
+  # ===========================================================================
+  - id: sbx-run-static-mcp
+    when:
+      command: [sbx, run, claude]
+      args: { --static-mcp: { any: true } }
+    then:
+      state: { kit.attached: true }
+      output:
+        - { text: "Creating sandbox 'demo' (agent: claude, static MCP: remotedhi)...", delay: boot }
+        - "  ✓ microVM booted through the proxy; host is read-only"
+        - "  ✓ remotedhi locked into the agent's one MCP gateway at creation"
+        - ""
+        - "The boxed agent can query DHI now - and only the servers fixed at create time."
+        - "Ask it to containerise with a hardened base."
+
+  - id: sbx-run
+    when:
+      command: [sbx, run, claude]
+    then:
+      output:
+        - { text: "Creating sandbox 'claude' (agent: claude)...", delay: boot }
+        - ""
+        - "Tip: add --name demo --static-mcp remotedhi to lock the DHI server into the box."
+
+  # ===========================================================================
+  # Agent sessions + filler.
+  # ===========================================================================
+  - id: claude-session
+    when:
+      command: [claude]
+    then:
+      session:
+        prompt: "claude> "
+        intro:
+          - "Claude Code ready. Enter a task, or type /exit to leave."
+        outro:
+          - "Claude session ended."
+
+  # The boxed agent, with DHI MCP loaded, queries the catalog before writing FROM.
+  - id: agent-dhi-build
+    when:
+      agent: true
+      promptContains: [hardened]
+    then:
+      files:
+        - create: Dockerfile
+          content: |
+            # syntax=docker/dockerfile:1
+            FROM dhi.io/node:24-debian13-dev AS build
+            WORKDIR /usr/local/app
+            COPY package*.json ./
+            RUN npm ci --omit=dev
+
+            FROM dhi.io/node:24-debian13 AS final
+            ENV NODE_ENV=production
+            WORKDIR /usr/local/app
+            COPY --from=build /usr/local/app/node_modules ./node_modules
+            COPY ./src ./src
+            EXPOSE 3000
+            CMD ["node", "src/index.js"]
+      output:
+        - "● Reading the project... Node.js service. Before I choose a base, I'll ask DHI."
+        - { text: "  -> remotedhi__dhi_list_repositories { query: \"node\" }", delay: scan }
+        - { text: "     ✓ dhi.io/node - hardened Node.js (distroless runtime + -dev build variant)", delay: pull }
+        - { text: "  -> remotedhi__dhi_get_image_cves { image: \"dhi.io/node:24-debian13\" }", delay: scan }
+        - { text: "     ✓ 0 critical · 0 high · 0 medium · 0 low", delay: pull }
+        - { text: "  -> remotedhi__dhi_get_image_attestations { image: \"dhi.io/node:24-debian13\" }", delay: pull }
+        - { text: "     ✓ SBOM + SLSA provenance + VEX, signed by Docker, Inc.", delay: pull }
+        - ""
+        - "● The catalog answered before I wrote a line. Building multi-stage on the hardened base..."
+        - { text: "  [+] Building 9.0s FROM dhi.io/node:24-debian13 (distroless)", delay: build }
+        - { text: "  => naming to docker.io/library/product-catalog:dhi", delay: build }
+        - "● Wrote Dockerfile and built product-catalog:dhi. Same prompt as the ungoverned run -"
+        - "  but on a hardened base. `cat Dockerfile` to read it, then scan it with Docker Scout."
+
+  # Prove the payoff with the SAME tool used in Contain: docker scout quickview.
+  - id: docker-scout-quickview-dhi
+    when:
+      command: [docker, scout, quickview]
+    then:
+      output:
+        - { text: "    ✓ Indexed 211 packages", delay: scan }
+        - ""
+        - "  Target             │  product-catalog:dhi      │    0C     0H     0M     0L"
+        - "    digest           │  a7f3c1d9e204             │"
+        - "  Base image         │  dhi.io/node:24-debian13  │    0C     0H     0M     0L"
+        - ""
+        - "Zero across the board. In Contain the same scan on node:20 read 2C / 12H / 20M / 13L"
+        - "over 431 packages; here it's 0 / 0 / 0 / 0 over 211. Same tool, same prompt - the"
+        - "DHI server in the box changed the outcome."
+
+  - id: agent-fallback
+    when:
+      agent: true
+    then:
+      output:
+        - "● With the DHI kit attached I can query the catalog. Ask me to containerise the"
+        - "  service and I'll pick a hardened, 0-CVE base."
+
+  - id: cd
+    when:
+      command: [cd]
+    then:
+      output:
+        - "Note: this simulated terminal has no working directory - every command runs from the lab root."
+
+  - id: sbx-mcp-generic
+    when:
+      command: [sbx, mcp]
+    then:
+      output:
+        - "sbx mcp manages the tool servers your agent can use. Try `sbx mcp add <name>"
+        - "  --url <url>`, `sbx mcp ls`, `sbx mcp auth <name>`, or `sbx mcp inspect <name>`."
