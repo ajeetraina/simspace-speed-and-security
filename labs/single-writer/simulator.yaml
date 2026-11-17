@@ -1,0 +1,180 @@
+version: "2.0"
+
+metadata:
+  id: single-writer
+  title: "Single-Writer"
+  summary: >
+    Reproduce the shared-state trap from the Coordinate slide and fix it. Two
+    sandboxes write one MEMORY.md on a shared host-mount@1 and lose 93-97% of
+    their writes; a lock probe shows why (flock and fcntl don't cross microVMs);
+    one writer keeps 200/200. A scripted replay of a real measured run on sbx
+    0.50.0 (ffroliva/sbx-team-kit, FINDINGS.md sections 1 and 1b).
+
+state:
+  raced: false        # tests/race-test.sh was run (two writers, loss observed)
+  locks_probed: false # tests/lock-visibility-test.sh was run (the mechanism)
+  controlled: false   # tests/race-control.sh was run (one writer, no loss)
+
+settings:
+  pace:
+    boot: 900
+    sync: 500
+
+defaults:
+  unmatched:
+    stderr: ["command not found - this command isn't part of the lab."]
+    exit: 1
+
+scenarios:
+  - id: sbx-version
+    when:
+      command: [sbx, version]
+    then:
+      output:
+        - "Docker Sandboxes (sbx) 0.50.0"
+        - "sandboxd: running"
+
+  # ===========================================================================
+  # Section 2 - Watch the writes vanish. Two sandboxes, one shared mount.
+  # ===========================================================================
+  - id: race-test
+    when:
+      command: [bash, tests/race-test.sh]
+    then:
+      state: { raced: true }
+      output:
+        - { text: "Creating sandbox 'writer-a' (agent: claude)...", delay: boot }
+        - { text: "Creating sandbox 'writer-b' (agent: claude)...", delay: boot }
+        - "  both --mount the SAME host directory (host-mount@1)"
+        - { text: "Both writers appending 200 lines each to MEMORY.md ...", delay: sync }
+        - ""
+        - "  expected: 400 lines   (200 from A + 200 from B)"
+        - "  actual:    11 lines   in MEMORY.md"
+        - ""
+        - "  -> 389 of 400 writes silently lost (97%). No error. No warning."
+        - ""
+        - "Repeated 3x (tests/md-race-repeat.sh): 28, 17, 16 of 400  (93-97% lost)."
+        - ""
+        - "SQLite variant (200 inserts per sandbox): 228 of 400 inserts failed"
+        - "  (Bus error, disk I/O error, unable to open database file) - and"
+        - "  afterwards the database could not be opened at all (error 14)."
+        - ""
+        - "The database case is worse still: two sandboxes on one PostgreSQL data"
+        - "dir acknowledged 494,800 rows, then 100% were gone after restart (4/4"
+        - "runs). See FINDINGS.md section 1b."
+        - ""
+        - "Why does this happen? Run: bash tests/lock-visibility-test.sh"
+
+  # ===========================================================================
+  # Section 3 - Why locks don't save you. Locks are per-VM.
+  # ===========================================================================
+  - id: lock-visibility
+    when:
+      command: [bash, tests/lock-visibility-test.sh]
+    then:
+      state: { locks_probed: true }
+      output:
+        - "Two sandboxes on one host-mount@1. Probe the locks agents rely on:"
+        - ""
+        - "  file written in A, read in B ......... visible immediately (both ways)"
+        - "  flock exclusive held in A ............ A's 2nd process BLOCKS, but B GETS THE LOCK"
+        - "  POSIX fcntl lock held in A ........... A: errno 11 (blocked); B GETS THE LOCK"
+        - "    (fcntl is what SQLite and PostgreSQL use)"
+        - "  postmaster.pid liveness .............. each VM has its own PID namespace;"
+        - "    a PID from another sandbox reads as DEAD"
+        - ""
+        - "Locks are per-VM. On a shared host-mount@1 every sandbox believes it"
+        - "holds the only lock - so every sandbox writes as if it were alone."
+        - "That is the whole bug. Plain files have no locking at all."
+
+  # ===========================================================================
+  # Section 4 - The single-writer fix. One writer never races itself.
+  # ===========================================================================
+  - id: race-control
+    when:
+      command: [bash, tests/race-control.sh]
+    then:
+      state: { controlled: true }
+      output:
+        - { text: "Creating sandbox 'writer' (agent: claude)...", delay: boot }
+        - { text: "ONE writer appending 200 lines to MEMORY.md ...", delay: sync }
+        - ""
+        - "  expected: 200 lines"
+        - "  actual:   200 lines   in MEMORY.md     integrity: ok"
+        - ""
+        - "  -> 0 lost. Every round. A single writer never races itself."
+        - ""
+        - "That is the fix, reduced to one line: one writer owns the file,"
+        - "everyone else reads. Fill a cache once, then share it read-only;"
+        - "serve shared memory through one broker that hands out fencing tokens."
+
+  # ---- cat MEMORY.md : reflects what the last run did (most specific first) ----
+  - id: cat-memory-controlled
+    when:
+      command: [cat, MEMORY.md]
+      state: { controlled: true }
+    then:
+      output:
+        - "# Shared agent memory"
+        - "note 0001  writer: single   ok"
+        - "note 0002  writer: single   ok"
+        - "   ... 200 notes, in order, none lost ..."
+        - "note 0200  writer: single   ok"
+
+  - id: cat-memory-raced
+    when:
+      command: [cat, MEMORY.md]
+      state: { raced: true }
+    then:
+      output:
+        - "# Shared agent memory"
+        - "note 0137  writer: b   (last write to land)"
+        - "note 0190  writer: a"
+        - "   ... only 11 of 400 notes survived; the rest were overwritten ..."
+        - "note 0200  writer: b"
+
+  - id: cat-memory-seed
+    when:
+      command: [cat, MEMORY.md]
+    then:
+      output:
+        - "# Shared agent memory"
+        - ""
+        - "Agents append notes here as they work. Each note is one line. Two agents"
+        - "appending at once is a classic read-modify-write race."
+
+  # ---- wc -l MEMORY.md : the count is the evidence ----
+  - id: wc-memory-controlled
+    when:
+      command: [wc, -l, MEMORY.md]
+      state: { controlled: true }
+    then:
+      output: ["200 MEMORY.md     (expected 200 - nothing lost)"]
+
+  - id: wc-memory-raced
+    when:
+      command: [wc, -l, MEMORY.md]
+      state: { raced: true }
+    then:
+      output: ["11 MEMORY.md      (expected 400 - 389 lost, silently)"]
+
+  - id: wc-memory-seed
+    when:
+      command: [wc, -l, MEMORY.md]
+    then:
+      output: ["4 MEMORY.md       (the seed header - run a race first)"]
+
+  # ---- directory listings ----
+  - id: ls-tests
+    when:
+      command: [ls, tests]
+    then:
+      output:
+        - "lock-visibility-test.sh  race-control.sh  race-test.sh"
+
+  - id: ls
+    when:
+      command: [ls]
+    then:
+      output:
+        - "MEMORY.md  README.md  tests/"
